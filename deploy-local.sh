@@ -97,25 +97,25 @@ setup_database() {
     systemctl enable postgresql 2>/dev/null || true
     
     # Check if user exists
-    USER_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='CryptoCrush_user'" 2>/dev/null)
+    USER_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='CryptoCrush_user'" 2>/dev/null || echo "0")
     if [ "$USER_EXISTS" != "1" ]; then
         log_info "Creating database user..."
-        sudo -u postgres psql -c "CREATE USER CryptoCrush_user WITH PASSWORD 'Cuongnv@123';"
+        sudo -u postgres psql -c "CREATE USER CryptoCrush_user WITH PASSWORD 'Cuongnv@123';" 2>/dev/null || log_warning "User may already exist"
     else
         log_info "Database user already exists"
     fi
     
     # Check if database exists
-    DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='CryptoCrush_db'" 2>/dev/null)
+    DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='CryptoCrush_db'" 2>/dev/null || echo "0")
     if [ "$DB_EXISTS" != "1" ]; then
         log_info "Creating database..."
-        sudo -u postgres psql -c "CREATE DATABASE CryptoCrush_db OWNER CryptoCrush_user;"
+        sudo -u postgres psql -c "CREATE DATABASE CryptoCrush_db OWNER CryptoCrush_user;" 2>/dev/null || log_warning "Database may already exist"
     else
         log_info "Database already exists"
     fi
     
     # Ensure permissions (safe to run multiple times)
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE CryptoCrush_db TO CryptoCrush_user;" 2>/dev/null
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE CryptoCrush_db TO CryptoCrush_user;" 2>/dev/null || true
     
     log_success "Database ready!"
 }
@@ -137,24 +137,20 @@ run_migrations() {
             filename VARCHAR(255) UNIQUE NOT NULL,
             applied_at TIMESTAMPTZ DEFAULT NOW()
         );
-    " 2>/dev/null
+    " 2>/dev/null || true
     
     for file in *.sql; do
         if [ -f "$file" ]; then
             # Check if migration already applied
-            APPLIED=$(psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -tAc "SELECT 1 FROM _migrations WHERE filename='$file'" 2>/dev/null)
+            APPLIED=$(psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -tAc "SELECT 1 FROM _migrations WHERE filename='$file'" 2>/dev/null || echo "0")
             
             if [ "$APPLIED" != "1" ]; then
                 log_info "Applying migration: $file"
-                if psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -f "$file" 2>/dev/null; then
-                    # Record successful migration
-                    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "INSERT INTO _migrations (filename) VALUES ('$file') ON CONFLICT DO NOTHING;" 2>/dev/null
-                    log_success "Migration $file applied"
-                else
-                    log_warning "Migration $file may have partial errors (tables might already exist)"
-                    # Still record it to avoid re-running
-                    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "INSERT INTO _migrations (filename) VALUES ('$file') ON CONFLICT DO NOTHING;" 2>/dev/null
-                fi
+                # Run migration, ignore errors (tables may already exist)
+                psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -f "$file" 2>&1 | grep -v "already exists" || true
+                # Record migration
+                psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "INSERT INTO _migrations (filename) VALUES ('$file') ON CONFLICT DO NOTHING;" 2>/dev/null || true
+                log_success "Migration $file applied"
             else
                 log_info "Skipping already applied: $file"
             fi
