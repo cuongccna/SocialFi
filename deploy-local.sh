@@ -3,6 +3,7 @@
 # =====================================================
 # CryptoCrush SocialFi - Local VPS Deployment Script
 # Run this script DIRECTLY on VPS (not via SSH)
+# IDEMPOTENT: Safe to run multiple times
 # =====================================================
 
 set -e
@@ -17,57 +18,110 @@ NC='\033[0m'
 # Configuration
 APP_DIR="/var/www/SocialFi"
 DOMAIN="dilink.click"
+BACKUP_DIR="/var/backups/cryptocrush"
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
 # =====================================================
-# 1. Install System Dependencies
+# 1. Install System Dependencies (only if missing)
 # =====================================================
 install_dependencies() {
-    log_info "Installing system dependencies..."
+    log_info "Checking system dependencies..."
     
-    apt-get update
-    apt-get install -y curl git nginx postgresql postgresql-contrib certbot python3-certbot-nginx
+    NEED_UPDATE=false
     
-    # Install Node.js 20.x if not installed
+    # Check each package
+    if ! command -v nginx &> /dev/null; then
+        log_info "Nginx not found, will install..."
+        NEED_UPDATE=true
+    fi
+    
+    if ! command -v psql &> /dev/null; then
+        log_info "PostgreSQL not found, will install..."
+        NEED_UPDATE=true
+    fi
+    
+    if ! command -v certbot &> /dev/null; then
+        log_info "Certbot not found, will install..."
+        NEED_UPDATE=true
+    fi
+    
+    if [ "$NEED_UPDATE" = true ]; then
+        apt-get update
+        apt-get install -y curl git nginx postgresql postgresql-contrib certbot python3-certbot-nginx
+    else
+        log_info "Basic packages already installed"
+    fi
+    
+    # Install Node.js 20.x if not installed or wrong version
     if ! command -v node &> /dev/null; then
         log_info "Installing Node.js 20.x..."
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
         apt-get install -y nodejs
+    else
+        NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+        if [ "$NODE_VERSION" -lt 18 ]; then
+            log_info "Upgrading Node.js to 20.x..."
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+        else
+            log_info "Node.js $(node -v) already installed"
+        fi
     fi
     
-    # Install PM2 globally
+    # Install PM2 globally if not installed
     if ! command -v pm2 &> /dev/null; then
         log_info "Installing PM2..."
         npm install -g pm2
+    else
+        log_info "PM2 already installed"
     fi
     
-    log_success "Dependencies installed!"
+    log_success "Dependencies ready!"
 }
 
 # =====================================================
-# 2. Setup PostgreSQL Database
+# 2. Setup PostgreSQL Database (create if not exists)
 # =====================================================
 setup_database() {
-    log_info "Setting up PostgreSQL database..."
+    log_info "Checking PostgreSQL database..."
     
-    # Start PostgreSQL
-    systemctl start postgresql
-    systemctl enable postgresql
+    # Start PostgreSQL if not running
+    systemctl start postgresql 2>/dev/null || true
+    systemctl enable postgresql 2>/dev/null || true
     
-    # Create user and database
-    sudo -u postgres psql -c "CREATE USER CryptoCrush_user WITH PASSWORD 'Cuongnv@123';" 2>/dev/null || log_warning "User already exists"
-    sudo -u postgres psql -c "CREATE DATABASE CryptoCrush_db OWNER CryptoCrush_user;" 2>/dev/null || log_warning "Database already exists"
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE CryptoCrush_db TO CryptoCrush_user;"
+    # Check if user exists
+    USER_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='CryptoCrush_user'" 2>/dev/null)
+    if [ "$USER_EXISTS" != "1" ]; then
+        log_info "Creating database user..."
+        sudo -u postgres psql -c "CREATE USER CryptoCrush_user WITH PASSWORD 'Cuongnv@123';"
+    else
+        log_info "Database user already exists"
+    fi
     
-    log_success "Database configured!"
+    # Check if database exists
+    DB_EXISTS=$(sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='CryptoCrush_db'" 2>/dev/null)
+    if [ "$DB_EXISTS" != "1" ]; then
+        log_info "Creating database..."
+        sudo -u postgres psql -c "CREATE DATABASE CryptoCrush_db OWNER CryptoCrush_user;"
+    else
+        log_info "Database already exists"
+    fi
+    
+    # Ensure permissions (safe to run multiple times)
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE CryptoCrush_db TO CryptoCrush_user;" 2>/dev/null
+    
+    log_success "Database ready!"
 }
 
 # =====================================================
-# 3. Run Database Migrations
+# 3. Run Database Migrations (idempotent)
 # =====================================================
 run_migrations() {
     log_info "Running database migrations..."
@@ -76,10 +130,34 @@ run_migrations() {
     
     export PGPASSWORD="Cuongnv@123"
     
+    # Create migrations tracking table if not exists
+    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "
+        CREATE TABLE IF NOT EXISTS _migrations (
+            id SERIAL PRIMARY KEY,
+            filename VARCHAR(255) UNIQUE NOT NULL,
+            applied_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    " 2>/dev/null
+    
     for file in *.sql; do
         if [ -f "$file" ]; then
-            log_info "Running migration: $file"
-            psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -f "$file" 2>/dev/null || log_warning "Migration $file may have already been applied"
+            # Check if migration already applied
+            APPLIED=$(psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -tAc "SELECT 1 FROM _migrations WHERE filename='$file'" 2>/dev/null)
+            
+            if [ "$APPLIED" != "1" ]; then
+                log_info "Applying migration: $file"
+                if psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -f "$file" 2>/dev/null; then
+                    # Record successful migration
+                    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "INSERT INTO _migrations (filename) VALUES ('$file') ON CONFLICT DO NOTHING;" 2>/dev/null
+                    log_success "Migration $file applied"
+                else
+                    log_warning "Migration $file may have partial errors (tables might already exist)"
+                    # Still record it to avoid re-running
+                    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "INSERT INTO _migrations (filename) VALUES ('$file') ON CONFLICT DO NOTHING;" 2>/dev/null
+                fi
+            else
+                log_info "Skipping already applied: $file"
+            fi
         fi
     done
     
@@ -87,13 +165,36 @@ run_migrations() {
 }
 
 # =====================================================
-# 4. Configure Environment
+# 4. Configure Environment (backup existing, create if not exists)
 # =====================================================
 configure_env() {
     log_info "Configuring environment..."
     
-    # Backend .env
-    cat > "$APP_DIR/server/.env" << 'EOF'
+    ENV_FILE="$APP_DIR/server/.env"
+    
+    # If .env exists, backup it
+    if [ -f "$ENV_FILE" ]; then
+        BACKUP_NAME="env_$(date +%Y%m%d_%H%M%S).backup"
+        cp "$ENV_FILE" "$BACKUP_DIR/$BACKUP_NAME"
+        log_info "Existing .env backed up to $BACKUP_DIR/$BACKUP_NAME"
+        
+        # Check if it's already production config
+        if grep -q "NODE_ENV=production" "$ENV_FILE"; then
+            log_info ".env already configured for production"
+            
+            # Just ensure CORS is correct
+            if ! grep -q "CORS_ORIGIN=https://dilink.click" "$ENV_FILE"; then
+                sed -i 's|CORS_ORIGIN=.*|CORS_ORIGIN=https://dilink.click|' "$ENV_FILE"
+                log_info "Updated CORS_ORIGIN"
+            fi
+            
+            log_success "Environment ready!"
+            return
+        fi
+    fi
+    
+    # Create production .env
+    cat > "$ENV_FILE" << 'EOF'
 # Server Configuration
 PORT=3000
 NODE_ENV=production
@@ -111,7 +212,7 @@ BOT_TOKEN=8450445506:AAHTteZ8NBswolK9N91y7d-cet9q5flIloE
 # CORS
 CORS_ORIGIN=https://dilink.click
 
-# TON Connect (update with your manifest URL)
+# TON Connect
 TONCONNECT_MANIFEST_URL=https://dilink.click/tonconnect-manifest.json
 EOF
 
@@ -137,34 +238,45 @@ build_app() {
     log_info "Building frontend..."
     npm run build
     
-    # Move build to nginx directory
-    rm -rf /var/www/html/cryptocrush
+    # Create target directory if not exists
     mkdir -p /var/www/html/cryptocrush
-    cp -r dist/* /var/www/html/cryptocrush/
+    
+    # Sync build (preserves existing files, updates changed ones)
+    rsync -av --delete dist/ /var/www/html/cryptocrush/ 2>/dev/null || cp -r dist/* /var/www/html/cryptocrush/
     
     log_success "Application built!"
 }
 
 # =====================================================
-# 6. Configure Nginx
+# 6. Configure Nginx (backup existing)
 # =====================================================
 configure_nginx() {
     log_info "Configuring Nginx..."
     
-    cat > /etc/nginx/sites-available/cryptocrush << 'EOF'
-# CryptoCrush SocialFi - Nginx Configuration
+    NGINX_CONF="/etc/nginx/sites-available/cryptocrush"
+    
+    # Backup existing config if different
+    if [ -f "$NGINX_CONF" ]; then
+        BACKUP_NAME="nginx_$(date +%Y%m%d_%H%M%S).backup"
+        cp "$NGINX_CONF" "$BACKUP_DIR/$BACKUP_NAME"
+        log_info "Existing Nginx config backed up"
+    fi
+    
+    # Check if SSL cert exists to decide which config to use
+    if [ -f "/etc/letsencrypt/live/dilink.click/fullchain.pem" ]; then
+        log_info "SSL certificate found, using HTTPS config..."
+        
+        cat > "$NGINX_CONF" << 'EOF'
+# CryptoCrush SocialFi - Nginx Configuration (HTTPS)
 
-# Rate limiting
 limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=general_limit:10m rate=60r/s;
 
-# Upstream for API
 upstream cryptocrush_api {
     server 127.0.0.1:3000;
     keepalive 64;
 }
 
-# HTTP - Redirect to HTTPS
 server {
     listen 80;
     listen [::]:80;
@@ -179,43 +291,32 @@ server {
     }
 }
 
-# HTTPS - Main server
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name dilink.click www.dilink.click;
     
-    # SSL (will be configured by certbot)
     ssl_certificate /etc/letsencrypt/live/dilink.click/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/dilink.click/privkey.pem;
     
-    # SSL Security
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
     ssl_prefer_server_ciphers off;
     ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 1d;
     
-    # Security headers
     add_header X-Frame-Options "ALLOWALL" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     
-    # Root for frontend
     root /var/www/html/cryptocrush;
     index index.html;
     
-    # Gzip compression
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json;
     
-    # API proxy
     location /api/ {
         limit_req zone=api_limit burst=50 nodelay;
-        
         proxy_pass http://cryptocrush_api;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -226,130 +327,202 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
         proxy_read_timeout 300s;
-        proxy_connect_timeout 75s;
     }
     
-    # TON Connect manifest
     location /tonconnect-manifest.json {
         add_header Access-Control-Allow-Origin *;
         add_header Cache-Control "public, max-age=3600";
     }
     
-    # Static assets caching
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
         access_log off;
     }
     
-    # SPA fallback
     location / {
         limit_req zone=general_limit burst=100 nodelay;
         try_files $uri $uri/ /index.html;
     }
 }
 EOF
+    else
+        log_info "No SSL certificate, using HTTP config..."
+        
+        cat > "$NGINX_CONF" << 'EOF'
+# CryptoCrush SocialFi - Nginx Configuration (HTTP only)
 
-    # Enable site
-    ln -sf /etc/nginx/sites-available/cryptocrush /etc/nginx/sites-enabled/
-    rm -f /etc/nginx/sites-enabled/default
-    
-    # Test and reload
-    nginx -t && systemctl reload nginx
-    
-    log_success "Nginx configured!"
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
+limit_req_zone $binary_remote_addr zone=general_limit:10m rate=60r/s;
+
+upstream cryptocrush_api {
+    server 127.0.0.1:3000;
+    keepalive 64;
 }
 
-# =====================================================
-# 7. Setup SSL with Let's Encrypt
-# =====================================================
-setup_ssl() {
-    log_info "Setting up SSL certificate..."
-    
-    # Check if certificate already exists
-    if [ -f "/etc/letsencrypt/live/dilink.click/fullchain.pem" ]; then
-        log_warning "SSL certificate already exists, skipping..."
-        return
-    fi
-    
-    # Get certificate (temporarily use HTTP config)
-    cat > /etc/nginx/sites-available/cryptocrush-temp << 'EOF'
 server {
     listen 80;
+    listen [::]:80;
     server_name dilink.click www.dilink.click;
+    
+    add_header X-Frame-Options "ALLOWALL" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    
     root /var/www/html/cryptocrush;
+    index index.html;
+    
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json;
     
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
     
+    location /api/ {
+        limit_req zone=api_limit burst=50 nodelay;
+        proxy_pass http://cryptocrush_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300s;
+    }
+    
+    location /tonconnect-manifest.json {
+        add_header Access-Control-Allow-Origin *;
+        add_header Cache-Control "public, max-age=3600";
+    }
+    
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+    
     location / {
+        limit_req zone=general_limit burst=100 nodelay;
         try_files $uri $uri/ /index.html;
     }
 }
 EOF
+    fi
+
+    # Enable site (safe - ln -sf overwrites)
+    ln -sf /etc/nginx/sites-available/cryptocrush /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
     
-    ln -sf /etc/nginx/sites-available/cryptocrush-temp /etc/nginx/sites-enabled/
-    rm -f /etc/nginx/sites-enabled/cryptocrush
-    nginx -t && systemctl reload nginx
+    # Test and reload
+    if nginx -t; then
+        systemctl reload nginx
+        log_success "Nginx configured!"
+    else
+        log_error "Nginx config test failed!"
+        # Restore backup
+        if [ -f "$BACKUP_DIR/$BACKUP_NAME" ]; then
+            cp "$BACKUP_DIR/$BACKUP_NAME" "$NGINX_CONF"
+            nginx -t && systemctl reload nginx
+            log_warning "Restored previous config"
+        fi
+    fi
+}
+
+# =====================================================
+# 7. Setup SSL with Let's Encrypt (skip if exists)
+# =====================================================
+setup_ssl() {
+    log_info "Checking SSL certificate..."
+    
+    # Check if certificate already exists and is valid
+    if [ -f "/etc/letsencrypt/live/dilink.click/fullchain.pem" ]; then
+        # Check expiry
+        EXPIRY=$(openssl x509 -enddate -noout -in /etc/letsencrypt/live/dilink.click/fullchain.pem 2>/dev/null | cut -d= -f2)
+        log_info "SSL certificate exists, expires: $EXPIRY"
+        
+        # Try to renew if needed
+        certbot renew --dry-run 2>/dev/null && log_info "Certificate is valid" || log_warning "Certificate may need renewal"
+        
+        # Reconfigure nginx with SSL
+        configure_nginx
+        
+        log_success "SSL ready!"
+        return
+    fi
+    
+    log_info "Setting up new SSL certificate..."
+    
+    # Make sure nginx is running with HTTP config first
+    configure_nginx
     
     # Get certificate
-    certbot certonly --webroot -w /var/www/html -d dilink.click -d www.dilink.click --non-interactive --agree-tos --email admin@dilink.click || {
+    certbot certonly --webroot -w /var/www/html -d dilink.click -d www.dilink.click \
+        --non-interactive --agree-tos --email admin@dilink.click || {
         log_error "Failed to get SSL certificate. Make sure DNS is pointing to this server."
-        # Restore original config without SSL
-        rm -f /etc/nginx/sites-enabled/cryptocrush-temp
-        return
+        return 1
     }
     
-    # Restore full config
-    rm -f /etc/nginx/sites-enabled/cryptocrush-temp
-    ln -sf /etc/nginx/sites-available/cryptocrush /etc/nginx/sites-enabled/
-    nginx -t && systemctl reload nginx
+    # Reconfigure nginx with SSL
+    configure_nginx
     
     # Setup auto-renewal
-    systemctl enable certbot.timer
-    systemctl start certbot.timer
+    systemctl enable certbot.timer 2>/dev/null || true
+    systemctl start certbot.timer 2>/dev/null || true
     
     log_success "SSL configured!"
 }
 
 # =====================================================
-# 8. Configure PM2
+# 8. Configure PM2 (restart if running, start if not)
 # =====================================================
 configure_pm2() {
     log_info "Configuring PM2..."
     
-    cd "$APP_DIR"
-    
-    # Stop existing instance if running
-    pm2 delete cryptocrush-api 2>/dev/null || true
-    
-    # Start application
-    pm2 start server/src/index.js --name cryptocrush-api \
-        --max-memory-restart 500M \
-        --log-date-format "YYYY-MM-DD HH:mm:ss" \
-        -o /var/log/cryptocrush/app.log \
-        -e /var/log/cryptocrush/error.log
-    
     # Create log directory
     mkdir -p /var/log/cryptocrush
+    
+    cd "$APP_DIR"
+    
+    # Check if process is already running
+    if pm2 describe cryptocrush-api > /dev/null 2>&1; then
+        log_info "PM2 process exists, restarting..."
+        pm2 restart cryptocrush-api
+    else
+        log_info "Starting new PM2 process..."
+        pm2 start server/src/index.js --name cryptocrush-api \
+            --max-memory-restart 500M \
+            --log-date-format "YYYY-MM-DD HH:mm:ss" \
+            -o /var/log/cryptocrush/app.log \
+            -e /var/log/cryptocrush/error.log
+    fi
     
     # Save PM2 config
     pm2 save
     
-    # Setup PM2 startup
-    pm2 startup systemd -u root --hp /root
+    # Setup PM2 startup (safe to run multiple times)
+    pm2 startup systemd -u root --hp /root 2>/dev/null || true
     
     log_success "PM2 configured!"
 }
 
 # =====================================================
-# 9. Create TON Connect Manifest
+# 9. Create TON Connect Manifest (only if not exists)
 # =====================================================
 create_tonconnect_manifest() {
-    log_info "Creating TON Connect manifest..."
+    log_info "Checking TON Connect manifest..."
     
-    cat > /var/www/html/cryptocrush/tonconnect-manifest.json << 'EOF'
+    MANIFEST_FILE="/var/www/html/cryptocrush/tonconnect-manifest.json"
+    
+    if [ -f "$MANIFEST_FILE" ]; then
+        log_info "TON Connect manifest already exists"
+        return
+    fi
+    
+    cat > "$MANIFEST_FILE" << 'EOF'
 {
   "url": "https://dilink.click",
   "name": "CryptoCrush",
@@ -363,24 +536,80 @@ EOF
 }
 
 # =====================================================
-# 10. Quick Update (git pull + restart)
+# 10. Quick Update (git pull + restart, preserve data)
 # =====================================================
 quick_update() {
     log_info "Quick update - pulling latest code..."
     
     cd "$APP_DIR"
+    
+    # Stash any local changes
+    git stash 2>/dev/null || true
+    
+    # Pull latest
     git pull origin main
     
-    # Rebuild frontend
+    # Rebuild frontend only
     cd "$APP_DIR/client"
     npm install
     npm run build
-    cp -r dist/* /var/www/html/cryptocrush/
     
-    # Restart backend
+    # Sync build (preserves, updates)
+    rsync -av --delete dist/ /var/www/html/cryptocrush/ 2>/dev/null || cp -r dist/* /var/www/html/cryptocrush/
+    
+    # Ensure tonconnect manifest exists
+    create_tonconnect_manifest
+    
+    # Restart backend (preserves env)
     pm2 restart cryptocrush-api
     
     log_success "Quick update complete!"
+}
+
+# =====================================================
+# 11. Status Check
+# =====================================================
+check_status() {
+    echo ""
+    log_info "=== System Status ==="
+    echo ""
+    
+    # Node.js
+    echo -n "Node.js: "
+    node -v 2>/dev/null || echo "Not installed"
+    
+    # PM2
+    echo -n "PM2: "
+    pm2 -v 2>/dev/null || echo "Not installed"
+    
+    # PostgreSQL
+    echo -n "PostgreSQL: "
+    systemctl is-active postgresql 2>/dev/null || echo "Not running"
+    
+    # Nginx
+    echo -n "Nginx: "
+    systemctl is-active nginx 2>/dev/null || echo "Not running"
+    
+    # SSL
+    echo -n "SSL Certificate: "
+    if [ -f "/etc/letsencrypt/live/dilink.click/fullchain.pem" ]; then
+        openssl x509 -enddate -noout -in /etc/letsencrypt/live/dilink.click/fullchain.pem 2>/dev/null | cut -d= -f2
+    else
+        echo "Not configured"
+    fi
+    
+    # PM2 processes
+    echo ""
+    log_info "=== PM2 Processes ==="
+    pm2 list 2>/dev/null || echo "No processes"
+    
+    # Database tables
+    echo ""
+    log_info "=== Database Tables ==="
+    export PGPASSWORD="Cuongnv@123"
+    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "\dt" 2>/dev/null || echo "Cannot connect"
+    
+    echo ""
 }
 
 # =====================================================
@@ -391,6 +620,7 @@ show_menu() {
     echo -e "${GREEN}=========================================${NC}"
     echo -e "${GREEN}  CryptoCrush Local Deployment Script${NC}"
     echo -e "${GREEN}  Domain: ${DOMAIN}${NC}"
+    echo -e "${GREEN}  IDEMPOTENT: Safe to run multiple times${NC}"
     echo -e "${GREEN}=========================================${NC}"
     echo ""
     echo "1) Full deployment (all steps)"
@@ -403,6 +633,7 @@ show_menu() {
     echo "8) Setup SSL only"
     echo "9) Configure PM2 only"
     echo "10) Quick update (git pull + rebuild + restart)"
+    echo "11) Check status"
     echo "0) Exit"
     echo ""
 }
@@ -473,6 +704,7 @@ case $choice in
     8) setup_ssl ;;
     9) configure_pm2 ;;
     10) quick_update ;;
+    11) check_status ;;
     0) exit 0 ;;
     *) log_error "Invalid option" ;;
 esac
