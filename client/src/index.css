@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CryptoCrush - Dark Cyberpunk Theme */
+
+:root {
+  --color-primary: #00ff88;
+  --color-danger: #ff4757;
+  --color-dark: #0a0a0f;
+  --color-neon-blue: #00d4ff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-dark);
+  color: white;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Telegram Mini App specific */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 255, 136, 0.3);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 255, 136, 0.5);
+}
+
+/* Utility classes */
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-dark font-semibold py-3 px-6 rounded-xl 
+           transition-all duration-200 active:scale-95
+           shadow-neon-green hover:shadow-lg;
+  }
+  
+  .btn-danger {
+    @apply bg-danger text-white font-semibold py-3 px-6 rounded-xl 
+           transition-all duration-200 active:scale-95
+           shadow-neon-red hover:shadow-lg;
+  }
+  
+  .btn-ghost {
+    @apply bg-white/10 text-white font-medium py-3 px-6 rounded-xl 
+           transition-all duration-200 active:scale-95 
+           border border-white/20 hover:bg-white/20;
+  }
+  
+  .card {
+    @apply bg-dark-50 rounded-2xl border border-white/10 
+           backdrop-blur-sm overflow-hidden;
+  }
+  
+  .card-glass {
+    @apply bg-white/5 rounded-2xl border border-white/10 
+           backdrop-blur-md;
+  }
+  
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary to-neon-blue 
+           bg-clip-text text-transparent;
+  }
+  
+  .price-up {
+    @apply text-primary;
+  }
+  
+  .price-down {
+    @apply text-danger;
+  }
+  
+  /* Rank badges */
+  .badge-whale {
+    @apply bg-neon-blue/20 text-neon-blue border border-neon-blue/30 
+           px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-shark {
+    @apply bg-neon-purple/20 text-neon-purple border border-neon-purple/30 
+           px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-shrimp {
+    @apply bg-white/10 text-white/70 border border-white/20 
+           px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+}
+
+/* Safe area for mobile */
+@supports (padding: max(0px)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Animation for swipe cards */
+.swipe-card {
+  touch-action: none;
+  will-change: transform;
+}
+
+/* Glow effects */
+.glow-green {
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.4);
+}
+
+.glow-red {
+  box-shadow: 0 0 30px rgba(255, 71, 87, 0.4);
+}
+
+/* Price ticker animation */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-ticker {
+  animation: ticker 20s linear infinite;
+}

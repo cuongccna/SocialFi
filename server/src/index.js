@@ -1,0 +1,122 @@
+/**
+ * CryptoCrush - SocialFi Dating Backend
+ * Entry point
+ */
+
+// Load environment variables FIRST (from root .env)
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+
+// Config & Database
+const config = require('./config');
+const { checkDbConnection } = require('./config/db');
+
+// Telegram Bot
+const { initBot } = require('./services/telegramBot');
+
+// Middlewares
+const { notFound, errorHandler } = require('./middlewares');
+
+// Routes
+const apiRoutes = require('./routes');
+
+// Initialize Express app
+const app = express();
+
+// ============================================
+// Middleware Stack
+// ============================================
+
+// Security headers
+app.use(helmet());
+
+// CORS configuration
+app.use(cors({
+  origin: config.corsOrigin,
+  credentials: true,
+}));
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Request logging (development)
+if (config.nodeEnv === 'development') {
+  app.use((req, res, next) => {
+    console.log(`📥 ${req.method} ${req.path}`);
+    next();
+  });
+}
+
+// ============================================
+// Routes
+// ============================================
+
+// API routes
+app.use('/api', apiRoutes);
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    name: 'CryptoCrush API',
+    description: 'SocialFi Dating Telegram Mini App',
+    version: '1.0.0',
+    docs: '/api/health',
+  });
+});
+
+// ============================================
+// Error Handling
+// ============================================
+
+app.use(notFound);
+app.use(errorHandler);
+
+// ============================================
+// Server Startup
+// ============================================
+
+async function startServer() {
+  console.log('\n🚀 Starting CryptoCrush Server...\n');
+  
+  // Test database connection
+  const dbConnected = await checkDbConnection();
+  
+  if (!dbConnected) {
+    console.error('\n⚠️  Server starting without database connection.');
+    console.error('   Some features may not work.\n');
+  }
+  
+  // Initialize Telegram Bot (if token provided)
+  if (config.botToken) {
+    initBot(config.botToken);
+  } else {
+    console.warn('⚠️  BOT_TOKEN not set. Bot relay features disabled.');
+  }
+  
+  // Start Express server
+  app.listen(config.port, () => {
+    console.log(`\n✨ Server is running!`);
+    console.log(`   🌐 URL: http://localhost:${config.port}`);
+    console.log(`   📦 Environment: ${config.nodeEnv}`);
+    console.log(`   🔗 Health: http://localhost:${config.port}/api/health\n`);
+  });
+}
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('💥 Unhandled Rejection:', err);
+  process.exit(1);
+});
+
+// Start the server
+startServer();
