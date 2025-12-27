@@ -3,6 +3,7 @@
  * Handles swipes, matches, and market cap updates
  */
 
+const pool = require('../config/db');
 const { getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const config = require('../config');
@@ -204,7 +205,7 @@ async function getSwipeHistory(req, res, next) {
     const limit = parseInt(req.query.limit) || 50;
     const offset = parseInt(req.query.offset) || 0;
     
-    const result = await client.query(`
+    const result = await pool.query(`
       SELECT 
         s.id,
         s.action,

@@ -151,7 +151,7 @@ export default function WalletPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-dark-bg p-4">
+      <div className="flex flex-col items-center justify-center h-full bg-dark-bg p-4">
         <Loader2 className="w-12 h-12 text-neon-green animate-spin mb-4" />
         <p className="text-white/60">Loading...</p>
       </div>
@@ -161,7 +161,7 @@ export default function WalletPage() {
   const isConnected = !!userFriendlyAddress || walletStatus?.is_connected;
 
   return (
-    <div className="min-h-screen bg-dark-bg pb-20">
+    <div className="h-full overflow-y-auto bg-dark-bg pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-dark-bg/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-3">

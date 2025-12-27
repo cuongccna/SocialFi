@@ -38,7 +38,7 @@ function App() {
   return (
     <div className="h-full flex flex-col bg-dark">
       {/* Main content area */}
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <Routes>
           <Route path="/" element={<HomePage user={user} />} />
           <Route path="/feed" element={<FeedPage />} />

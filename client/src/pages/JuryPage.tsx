@@ -164,7 +164,7 @@ export default function JuryPage() {
   // Render loading state
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-dark-bg p-4">
+      <div className="flex flex-col items-center justify-center h-full bg-dark-bg p-4">
         <Loader2 className="w-12 h-12 text-neon-green animate-spin mb-4" />
         <p className="text-white/60">Loading cases...</p>
       </div>
@@ -174,7 +174,7 @@ export default function JuryPage() {
   // Render error state
   if (error && disputes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-dark-bg p-4">
+      <div className="flex flex-col items-center justify-center h-full bg-dark-bg p-4">
         <AlertTriangle className="w-16 h-16 text-neon-red mb-4" />
         <h2 className="text-xl font-bold text-white mb-2">Error</h2>
         <p className="text-white/60 text-center mb-4">{error}</p>
@@ -189,7 +189,7 @@ export default function JuryPage() {
   // Render empty state
   if (disputes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-dark-bg p-4">
+      <div className="flex flex-col items-center justify-center h-full bg-dark-bg p-4">
         <div className="bg-gradient-to-b from-neon-green/20 to-transparent p-8 rounded-full mb-6">
           <Scale className="w-20 h-20 text-neon-green" />
         </div>
@@ -225,7 +225,7 @@ export default function JuryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg">
+    <div className="h-full overflow-y-auto bg-dark-bg pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-dark-bg/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
         <div className="flex items-center justify-between">

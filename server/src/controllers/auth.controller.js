@@ -8,7 +8,7 @@
  * Authenticate user via Telegram initData
  * User is already upserted by authMiddleware
  */
-async function login(req, res) {
+async function login(req, res, next) {
   try {
     // User should be attached by authMiddleware (already upserted)
     const user = req.user;
@@ -46,11 +46,7 @@ async function login(req, res) {
     });
   } catch (error) {
     console.error('❌ Login error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Login failed',
-      error: error.message,
-    });
+    next(error);
   }
 }
 
@@ -58,7 +54,7 @@ async function login(req, res) {
  * GET /auth/me
  * Get current authenticated user's profile
  */
-async function getMe(req, res) {
+async function getMe(req, res, next) {
   try {
     // User is already attached by authMiddleware
     const user = req.user;
@@ -94,11 +90,7 @@ async function getMe(req, res) {
     });
   } catch (error) {
     console.error('❌ Get me error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get user profile',
-      error: error.message,
-    });
+    next(error);
   }
 }
 
