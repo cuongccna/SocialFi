@@ -196,7 +196,7 @@ configure_env() {
     # Create production .env
     cat > "$ENV_FILE" << 'EOF'
 # Server Configuration
-PORT=3000
+PORT=3005
 NODE_ENV=production
 
 # PostgreSQL Database
@@ -273,7 +273,7 @@ limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=general_limit:10m rate=60r/s;
 
 upstream cryptocrush_api {
-    server 127.0.0.1:3000;
+    server 127.0.0.1:3005;
     keepalive 64;
 }
 
@@ -356,7 +356,7 @@ limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=general_limit:10m rate=60r/s;
 
 upstream cryptocrush_api {
-    server 127.0.0.1:3000;
+    server 127.0.0.1:3005;
     keepalive 64;
 }
 
