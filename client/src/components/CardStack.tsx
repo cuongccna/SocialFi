@@ -8,7 +8,7 @@
  * - Infinite Loading (prefetch when 3 cards left)
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   motion,
   useMotionValue,
@@ -37,6 +37,11 @@ interface CardStackProps {
   onNeedMore?: () => void; // Callback for infinite loading
 }
 
+// Expose methods to parent component
+export interface CardStackHandle {
+  triggerSwipe: (direction: 'left' | 'right') => void;
+}
+
 interface SwipeCardProps {
   profile: FeedUser;
   onSwipe: (direction: 'left' | 'right', swipeInfo: SwipeInfo) => void;
@@ -45,6 +50,7 @@ interface SwipeCardProps {
   isMystery?: boolean;
   onMysteryUnlock?: () => void;
   onWhaleMatch?: () => void;
+  buttonSwipeDirection?: 'left' | 'right' | null;
 }
 
 // Mystery Card interval
@@ -291,6 +297,7 @@ function SwipeCard({
   isMystery = false,
   onMysteryUnlock,
   onWhaleMatch,
+  buttonSwipeDirection,
 }: SwipeCardProps) {
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
   const [mysteryRevealed, setMysteryRevealed] = useState(false);
@@ -299,6 +306,38 @@ function SwipeCard({
   const [livePrice, setLivePrice] = useState(profile.market_price);
   const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'neutral'>('neutral');
   const [priceFlash, setPriceFlash] = useState(false);
+
+  // Handle button swipe trigger
+  useEffect(() => {
+    if (buttonSwipeDirection && isTop && !exitDirection) {
+      // Trigger swipe animation from button
+      setExitDirection(buttonSwipeDirection);
+      
+      const swipeInfo: SwipeInfo = {
+        isMystery: isMystery || false,
+        isVip: (profile as any).source === 'vip',
+        isWhale: profile.wallet_rank === 'WHALE',
+      };
+      
+      if (buttonSwipeDirection === 'right') {
+        // LONG - right swipe
+        if (profile.wallet_rank === 'WHALE') {
+          haptic.notification('success');
+          haptic.impact('heavy');
+          setTimeout(() => haptic.impact('heavy'), 100);
+          setTimeout(() => haptic.impact('heavy'), 200);
+          onWhaleMatch?.();
+        } else {
+          haptic.notification('success');
+        }
+      } else {
+        // SHORT - left swipe
+        haptic.notification('warning');
+      }
+      
+      setTimeout(() => onSwipe(buttonSwipeDirection, swipeInfo), 100);
+    }
+  }, [buttonSwipeDirection, isTop, exitDirection, profile, isMystery, onSwipe, onWhaleMatch]);
 
   // Live Price Ticker effect - only for top card
   useEffect(() => {
@@ -634,11 +673,24 @@ function SwipeCard({
 // Card Stack Component - Main Export
 // ============================================
 
-export default function CardStack({ profiles, onSwipe, onEmpty, onNeedMore }: CardStackProps) {
+const CardStack = forwardRef<CardStackHandle, CardStackProps>(
+  function CardStack({ profiles, onSwipe, onEmpty, onNeedMore }, ref) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeCount, setSwipeCount] = useState(0);
   const [showFireworks, setShowFireworks] = useState(false);
+  const [buttonSwipeDirection, setButtonSwipeDirection] = useState<'left' | 'right' | null>(null);
   const prefetchTriggeredRef = useRef(false);
+
+  // Expose triggerSwipe method to parent
+  useImperativeHandle(ref, () => ({
+    triggerSwipe: (direction: 'left' | 'right') => {
+      if (currentIndex < profiles.length) {
+        setButtonSwipeDirection(direction);
+        // Reset after animation completes
+        setTimeout(() => setButtonSwipeDirection(null), 100);
+      }
+    },
+  }), [currentIndex, profiles.length]);
 
   // Reset prefetch flag when new profiles are added
   useEffect(() => {
@@ -777,9 +829,12 @@ export default function CardStack({ profiles, onSwipe, onEmpty, onNeedMore }: Ca
             isMystery={isMystery}
             onMysteryUnlock={handleMysteryUnlock}
             onWhaleMatch={handleWhaleMatch}
+            buttonSwipeDirection={index === 0 ? buttonSwipeDirection : null}
           />
         )).reverse()}
       </AnimatePresence>
     </div>
   );
-}
+});
+
+export default CardStack;

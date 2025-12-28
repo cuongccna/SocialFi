@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { RefreshCw, MapPin, Heart, X } from 'lucide-react';
-import CardStack from '../components/CardStack';
+import CardStack, { type CardStackHandle } from '../components/CardStack';
 import MatchPopup from '../components/MatchPopup';
 import { haptic } from '../utils/telegram';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,9 @@ export default function FeedPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [swipeCount, setSwipeCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  
+  // Ref for CardStack to trigger swipe from buttons
+  const cardStackRef = useRef<CardStackHandle>(null);
   
   // Match popup state
   const [showMatchPopup, setShowMatchPopup] = useState(false);
@@ -247,6 +250,7 @@ export default function FeedPage() {
       {/* Card Stack Area */}
       <div className="flex-1 relative overflow-hidden">
         <CardStack
+          ref={cardStackRef}
           profiles={users}
           onSwipe={handleSwipe}
           onEmpty={handleEmpty}
@@ -259,7 +263,10 @@ export default function FeedPage() {
         {/* SHORT Button */}
         <button
           className="w-16 h-16 rounded-full bg-danger/20 border-2 border-danger/50 flex items-center justify-center hover:bg-danger/30 hover:scale-110 transition-all active:scale-95"
-          onClick={() => haptic.impact('medium')}
+          onClick={() => {
+            haptic.impact('medium');
+            cardStackRef.current?.triggerSwipe('left');
+          }}
         >
           <X className="w-8 h-8 text-danger" />
         </button>
@@ -267,7 +274,10 @@ export default function FeedPage() {
         {/* LONG Button */}
         <button
           className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center hover:bg-primary/30 hover:scale-110 transition-all active:scale-95"
-          onClick={() => haptic.impact('medium')}
+          onClick={() => {
+            haptic.impact('medium');
+            cardStackRef.current?.triggerSwipe('right');
+          }}
         >
           <Heart className="w-8 h-8 text-primary" />
         </button>
