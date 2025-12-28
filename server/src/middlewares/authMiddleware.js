@@ -126,6 +126,43 @@ async function authMiddleware(req, res, next) {
     // Get initData from Authorization header
     const authHeader = req.headers.authorization;
     
+    // =========================================
+    // DEVELOPMENT MODE BYPASS
+    // Allow testing without real Telegram initData
+    // =========================================
+    if (process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true') {
+      // Check for dev auth header format: "DevAuth telegram_id"
+      if (authHeader && authHeader.startsWith('DevAuth ')) {
+        const telegramId = authHeader.slice(8);
+        const userResult = await query(
+          'SELECT * FROM users WHERE telegram_id = $1',
+          [telegramId]
+        );
+        
+        if (userResult.rows.length > 0) {
+          req.user = userResult.rows[0];
+          req.telegramData = { user: { id: telegramId }, authDate: Date.now() / 1000 };
+          console.log(`🔓 DEV AUTH: ${req.user.display_name} (${telegramId})`);
+          return next();
+        }
+      }
+      
+      // If no specific user, use first user in database
+      if (!authHeader || authHeader === 'mock_init_data_for_development') {
+        const userResult = await query(
+          'SELECT * FROM users WHERE is_active = TRUE ORDER BY created_at ASC LIMIT 1'
+        );
+        
+        if (userResult.rows.length > 0) {
+          req.user = userResult.rows[0];
+          req.telegramData = { user: { id: req.user.telegram_id }, authDate: Date.now() / 1000 };
+          console.log(`🔓 DEV AUTH (default): ${req.user.display_name} (${req.user.telegram_id})`);
+          return next();
+        }
+      }
+    }
+    // =========================================
+    
     if (!authHeader) {
       throw new ApiError(401, 'Missing Authorization header');
     }
