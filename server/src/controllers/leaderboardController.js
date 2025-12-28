@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Leaderboard Controller
  * Top users by market cap, matches, etc.
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 
 /**
  * GET /leaderboard

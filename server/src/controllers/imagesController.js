@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Images Controller
  * Handle blurred image sending and unblurring (Blur-to-Earn)
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const { sendBlurredImage } = require('../services/telegramBot');
 

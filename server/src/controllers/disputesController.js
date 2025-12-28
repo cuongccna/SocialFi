@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Disputes Controller (Jury DAO)
  * Handle dispute creation, voting, and resolution
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 
 /**
  * GET /disputes

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Auth Controller
  * Handles Telegram authentication and user management
  */
@@ -20,7 +20,7 @@ async function login(req, res, next) {
       });
     }
 
-    console.log(`✅ User logged in: ${user.display_name} (ID: ${user.id})`);
+    console.log(`âœ… User logged in: ${user.display_name} (ID: ${user.id})`);
 
     res.json({
       success: true,
@@ -45,7 +45,7 @@ async function login(req, res, next) {
       },
     });
   } catch (error) {
-    console.error('❌ Login error:', error);
+    console.error('âŒ Login error:', error);
     next(error);
   }
 }
@@ -89,7 +89,7 @@ async function getMe(req, res, next) {
       },
     });
   } catch (error) {
-    console.error('❌ Get me error:', error);
+    console.error('âŒ Get me error:', error);
     next(error);
   }
 }

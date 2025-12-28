@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Referrals Controller
  * Invite friends and earn $LOVE
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const crypto = require('crypto');
 

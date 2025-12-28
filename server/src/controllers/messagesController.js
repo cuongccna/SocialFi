@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Messages Controller
  * Chat between matched users
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const { sendAnonymousMessage } = require('../services/telegramBot');
 

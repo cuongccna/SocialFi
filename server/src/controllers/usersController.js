@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Users Controller
  * User profile and stats
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 
 /**
  * GET /users/stats

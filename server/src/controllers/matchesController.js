@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Matches Controller
  * Handles relationships and matches
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 const { ApiError } = require('../middlewares');
 
 /**
@@ -171,7 +171,7 @@ async function mintContract(req, res, next) {
 
     res.json({
       success: true,
-      message: '💍 Relationship contract minted!',
+      message: 'ðŸ’ Relationship contract minted!',
       relationship: result.rows[0],
     });
 
@@ -214,7 +214,7 @@ async function burnContract(req, res, next) {
 
     res.json({
       success: true,
-      message: '💔 Relationship ended',
+      message: 'ðŸ’” Relationship ended',
       relationship: result.rows[0],
     });
 

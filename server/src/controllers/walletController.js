@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Wallet Controller
  * TON wallet connection and management
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 
 /**
  * POST /wallet/connect

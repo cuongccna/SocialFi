@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Feed Controller
  * Handles the "Trading Floor" - finding nearby users to swipe
  * Uses Waterfall Logic to ensure users NEVER see an empty feed

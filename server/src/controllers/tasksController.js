@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Tasks Controller
  * Daily missions and tasks for earning $LOVE
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 const { ApiError } = require('../middlewares');
 
 /**

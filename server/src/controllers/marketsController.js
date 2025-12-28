@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Markets Controller
  * Prediction markets for couples
  */
 
 const { getClient } = require('../config/db');
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 const { ApiError } = require('../middlewares');
 
 /**

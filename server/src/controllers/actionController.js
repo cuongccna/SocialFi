@@ -1,9 +1,9 @@
-/**
+﻿/**
  * Action Controller
  * Handles swipes, matches, and market cap updates
  */
 
-const pool = require('../config/db');
+const { pool, query } = require('../config/db');
 const { getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const config = require('../config');
@@ -222,10 +222,10 @@ async function swipe(req, res, next) {
     // Add bonus message if applicable
     if (bonusReason) {
       const bonusMessages = {
-        MYSTERY_UNLOCK: `🎁 MYSTERY JACKPOT! x${bonusMultiplier} $LOVE earned!`,
-        VIP_WHALE: `🐋 VIP WHALE BONUS! x${bonusMultiplier} $LOVE earned!`,
-        VIP_SHARK: `🦈 VIP SHARK BONUS! x${bonusMultiplier} $LOVE earned!`,
-        WHALE_LIKE: `🐋 WHALE BONUS! x${bonusMultiplier} $LOVE earned!`,
+        MYSTERY_UNLOCK: `ðŸŽ MYSTERY JACKPOT! x${bonusMultiplier} $LOVE earned!`,
+        VIP_WHALE: `ðŸ‹ VIP WHALE BONUS! x${bonusMultiplier} $LOVE earned!`,
+        VIP_SHARK: `ðŸ¦ˆ VIP SHARK BONUS! x${bonusMultiplier} $LOVE earned!`,
+        WHALE_LIKE: `ðŸ‹ WHALE BONUS! x${bonusMultiplier} $LOVE earned!`,
       };
       response.data.reward.bonus_message = bonusMessages[bonusReason];
     }
@@ -234,7 +234,7 @@ async function swipe(req, res, next) {
       response.data.relationship = {
         id: relationship.id,
         status: relationship.status,
-        message: '🎉 It\'s a Match! You both LONG each other!',
+        message: 'ðŸŽ‰ It\'s a Match! You both LONG each other!',
         match_pump: `+${config.constants.PRICE_CHANGE_MATCH}% to both market caps!`,
       };
     }
