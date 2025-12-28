@@ -6,8 +6,11 @@
 
 const express = require('express');
 const router = express.Router();
-const { getFeed, getFeedStats, resurrectPasses, getTrending } = require('../controllers/feedController');
+const { getFeed, getFeedStats, resurrectPasses, getTrending, debugFeed } = require('../controllers/feedController');
 const { authMiddleware } = require('../middlewares');
+
+// Debug route (no auth required for testing)
+router.get('/debug', authMiddleware, debugFeed);
 
 // All feed routes require authentication
 router.use(authMiddleware);

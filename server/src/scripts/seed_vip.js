@@ -9,12 +9,17 @@
  * Usage: node src/scripts/seed_vip.js
  */
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const { Pool } = require('pg');
 
-// Database connection
+// Database connection - use same config as main app
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || 'CryptoCrush_db',
+  user: process.env.DB_USER || 'CryptoCrush_user',
+  password: process.env.DB_PASSWORD || 'Cuongnv@123',
 });
 
 // VIP Profiles Data - Beautiful KOL/Model profiles

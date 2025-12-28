@@ -440,9 +440,74 @@ async function getTrending(req, res, next) {
   }
 }
 
+/**
+ * GET /feed/debug
+ * Debug endpoint to check database status
+ */
+async function debugFeed(req, res, next) {
+  try {
+    const userId = req.user?.id || null;
+    
+    // Check total users
+    const totalUsersResult = await query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE');
+    const totalUsers = parseInt(totalUsersResult.rows[0].count);
+    
+    // Check VIP users
+    const vipUsersResult = await query('SELECT COUNT(*) as count FROM users WHERE is_vip = TRUE');
+    const vipUsers = parseInt(vipUsersResult.rows[0].count);
+    
+    // Check users with location
+    const usersWithLocationResult = await query(
+      'SELECT COUNT(*) as count FROM users WHERE latitude IS NOT NULL AND longitude IS NOT NULL'
+    );
+    const usersWithLocation = parseInt(usersWithLocationResult.rows[0].count);
+    
+    // Check if calculate_distance_km function exists
+    let functionExists = false;
+    try {
+      await query('SELECT calculate_distance_km(10.0, 106.0, 10.1, 106.1)');
+      functionExists = true;
+    } catch (e) {
+      functionExists = false;
+    }
+    
+    // Check swipes count for current user
+    let userSwipes = 0;
+    if (userId) {
+      const swipesResult = await query('SELECT COUNT(*) as count FROM swipes WHERE actor_id = $1', [userId]);
+      userSwipes = parseInt(swipesResult.rows[0].count);
+    }
+    
+    // Get sample users
+    const sampleUsersResult = await query(`
+      SELECT id, telegram_id, display_name, wallet_rank, market_price, is_vip, 
+             latitude, longitude, is_active
+      FROM users 
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `);
+    
+    res.json({
+      success: true,
+      debug: {
+        totalUsers,
+        vipUsers,
+        usersWithLocation,
+        functionExists,
+        currentUserId: userId,
+        userSwipes,
+        sampleUsers: sampleUsersResult.rows,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getFeed,
   getFeedStats,
   resurrectPasses,
   getTrending,
+  debugFeed,
 };
