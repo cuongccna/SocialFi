@@ -485,9 +485,9 @@ function SwipeCard({
           <img
             src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`}
             alt={profile.display_name}
-            className={`w-full h-2/3 object-cover ${showMystery ? 'opacity-10 blur-xl' : 'opacity-40'}`}
+            className={`w-full h-1/2 object-cover object-top ${showMystery ? 'opacity-10 blur-xl' : 'opacity-50'}`}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#12121a] via-[#12121a]/90 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#12121a] via-[#12121a]/80 to-[#12121a]/30" />
         </div>
 
         {/* Whale Indicator */}
@@ -542,7 +542,7 @@ function SwipeCard({
               {profile.distance_km && (
                 <div className="flex items-center gap-1.5 text-white/60 text-sm">
                   <MapPin className="w-4 h-4" />
-                  <span>{profile.distance_km.toFixed(1)} km</span>
+                  <span>{parseFloat(String(profile.distance_km)).toFixed(1)} km</span>
                 </div>
               )}
             </div>
@@ -738,9 +738,9 @@ export default function CardStack({ profiles, onSwipe, onEmpty, onNeedMore }: Ca
         )}
       </AnimatePresence>
       
-      {/* Swipe Counter */}
-      <div className="absolute top-4 right-4 z-50 bg-dark/80 backdrop-blur-sm rounded-full px-3 py-1">
-        <span className="text-xs text-white/60">
+      {/* Swipe Counter - Bottom right to avoid avatar */}
+      <div className="absolute bottom-28 right-4 z-50 bg-dark/80 backdrop-blur-sm rounded-full px-3 py-1.5">
+        <span className="text-xs text-white/70">
           🔥 {swipeCount} swipes
         </span>
       </div>

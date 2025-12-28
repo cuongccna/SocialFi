@@ -30,7 +30,14 @@ axiosClient.interceptors.request.use(
       // Attach initData as Authorization header
       config.headers.Authorization = initData;
     } else {
-      console.warn('⚠️ No initData available - request may fail authentication');
+      // In development mode without Telegram, use mock auth header
+      // This triggers DEV_BYPASS_AUTH on the backend
+      if (import.meta.env.DEV) {
+        config.headers.Authorization = 'mock_init_data_for_development';
+        console.warn('⚠️ Using mock auth for development');
+      } else {
+        console.warn('⚠️ No initData available - request may fail authentication');
+      }
     }
 
     // Log request for debugging (remove in production)
