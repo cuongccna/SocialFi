@@ -1,9 +1,9 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 # =============================================================================
 # CryptoCrush SocialFi - Deployment Script
 # VPS: 72.61.114.103
-# Domain: dilink.click
+# Domain: magiamhot.io.vn
 # =============================================================================
 
 set -e
@@ -13,7 +13,7 @@ VPS_IP="72.61.114.103"
 VPS_USER="root"
 APP_DIR="/var/www/SocialFi"
 REPO_URL="https://github.com/cuongccna/SocialFi.git"
-DOMAIN="dilink.click"
+DOMAIN="magiamhot.io.vn"
 NODE_ENV="production"
 
 # Colors for output
@@ -129,10 +129,10 @@ PGPASSWORD=YOUR_DB_PASSWORD
 TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
 
 # CORS
-CORS_ORIGIN=https://dilink.click
+CORS_ORIGIN=https://magiamhot.io.vn
 
 # TonConnect
-TONCONNECT_MANIFEST_URL=https://dilink.click/tonconnect-manifest.json
+TONCONNECT_MANIFEST_URL=https://magiamhot.io.vn/tonconnect-manifest.json
 EOF
             echo "Created .env file - PLEASE UPDATE WITH ACTUAL VALUES!"
         else
@@ -156,7 +156,7 @@ configure_nginx() {
 server {
     listen 80;
     listen [::]:80;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
 
     # Redirect HTTP to HTTPS
     return 301 https://$server_name$request_uri;
@@ -165,11 +165,11 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
 
     # SSL certificates (will be configured by certbot)
-    ssl_certificate /etc/letsencrypt/live/dilink.click/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dilink.click/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/magiamhot.io.vn/privkey.pem;
     
     # SSL settings
     ssl_session_timeout 1d;
@@ -255,7 +255,7 @@ setup_ssl() {
 server {
     listen 80;
     listen [::]:80;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
     
     root /var/www/SocialFi/client/dist;
     
@@ -437,8 +437,8 @@ final_restart() {
         
         echo ""
         echo "=== Service URLs ==="
-        echo "Frontend: https://dilink.click"
-        echo "API: https://dilink.click/api"
+        echo "Frontend: https://magiamhot.io.vn"
+        echo "API: https://magiamhot.io.vn/api"
         
         echo ""
         echo "Deployment complete!"

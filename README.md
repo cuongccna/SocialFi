@@ -1,4 +1,4 @@
-# CryptoCrush SocialFi - Dating Telegram Mini App
+﻿# CryptoCrush SocialFi - Dating Telegram Mini App
 
 <p align="center">
   <img src="docs/assets/logo.png" alt="CryptoCrush Logo" width="200">
@@ -9,16 +9,16 @@
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> •
-  <a href="#tech-stack">Tech Stack</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#deployment">Deployment</a> •
+  <a href="#features">Features</a> â€¢
+  <a href="#tech-stack">Tech Stack</a> â€¢
+  <a href="#quick-start">Quick Start</a> â€¢
+  <a href="#deployment">Deployment</a> â€¢
   <a href="#api-documentation">API Docs</a>
 </p>
 
 ---
 
-## 🚀 Features
+## ðŸš€ Features
 
 ### Core Dating Features
 - **Tinder-style Swipe Feed** - Swipe right to like, left to pass, up to superlike
@@ -40,7 +40,7 @@
 
 ---
 
-## 🛠 Tech Stack
+## ðŸ›  Tech Stack
 
 ### Backend
 - **Node.js** with Express.js
@@ -63,7 +63,7 @@
 
 ---
 
-## 🏃 Quick Start
+## ðŸƒ Quick Start
 
 ### Prerequisites
 - Node.js v20+
@@ -123,7 +123,7 @@ cloudflared tunnel --url http://localhost:5173
 
 ---
 
-## 📦 Deployment
+## ðŸ“¦ Deployment
 
 ### Automated Deployment
 ```bash
@@ -141,7 +141,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions.
 
 ---
 
-## 📚 API Documentation
+## ðŸ“š API Documentation
 
 ### Authentication
 All API requests require Telegram initData in Authorization header.
@@ -169,39 +169,39 @@ All API requests require Telegram initData in Authorization header.
 
 ---
 
-## 📁 Project Structure
+## ðŸ“ Project Structure
 
 ```
 SocialFi/
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── api/           # API client
-│   │   ├── components/    # UI components
-│   │   ├── context/       # React contexts
-│   │   ├── pages/         # Page components
-│   │   ├── services/      # API services
-│   │   └── utils/         # Utilities
-│   └── public/            # Static assets
-├── server/                 # Express backend
-│   └── src/
-│       ├── config/        # Configuration
-│       ├── controllers/   # Route handlers
-│       ├── middlewares/   # Express middlewares
-│       ├── routes/        # API routes
-│       └── services/      # Business logic
-├── database/
-│   └── migrations/        # SQL migrations
-├── docs/                   # Documentation
-│   ├── DEPLOYMENT.md      # Deployment guide
-│   └── TEST_CASES.md      # Test cases
-├── nginx/                  # Nginx configs
-├── deploy.sh              # Deployment script
-└── ecosystem.config.js    # PM2 config
+â”œâ”€â”€ client/                 # React frontend
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ api/           # API client
+â”‚   â”‚   â”œâ”€â”€ components/    # UI components
+â”‚   â”‚   â”œâ”€â”€ context/       # React contexts
+â”‚   â”‚   â”œâ”€â”€ pages/         # Page components
+â”‚   â”‚   â”œâ”€â”€ services/      # API services
+â”‚   â”‚   â””â”€â”€ utils/         # Utilities
+â”‚   â””â”€â”€ public/            # Static assets
+â”œâ”€â”€ server/                 # Express backend
+â”‚   â””â”€â”€ src/
+â”‚       â”œâ”€â”€ config/        # Configuration
+â”‚       â”œâ”€â”€ controllers/   # Route handlers
+â”‚       â”œâ”€â”€ middlewares/   # Express middlewares
+â”‚       â”œâ”€â”€ routes/        # API routes
+â”‚       â””â”€â”€ services/      # Business logic
+â”œâ”€â”€ database/
+â”‚   â””â”€â”€ migrations/        # SQL migrations
+â”œâ”€â”€ docs/                   # Documentation
+â”‚   â”œâ”€â”€ DEPLOYMENT.md      # Deployment guide
+â”‚   â””â”€â”€ TEST_CASES.md      # Test cases
+â”œâ”€â”€ nginx/                  # Nginx configs
+â”œâ”€â”€ deploy.sh              # Deployment script
+â””â”€â”€ ecosystem.config.js    # PM2 config
 ```
 
 ---
 
-## 🧪 Testing
+## ðŸ§ª Testing
 
 See [docs/TEST_CASES.md](docs/TEST_CASES.md) for comprehensive test cases.
 
@@ -215,7 +215,7 @@ cd client && npm test
 
 ---
 
-## 🔐 Security
+## ðŸ” Security
 
 - Telegram initData verification with HMAC-SHA256
 - Rate limiting on all endpoints
@@ -225,13 +225,13 @@ cd client && npm test
 
 ---
 
-## 📄 License
+## ðŸ“„ License
 
 MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-## 👥 Contributing
+## ðŸ‘¥ Contributing
 
 1. Fork the repository
 2. Create feature branch: `git checkout -b feature/amazing`
@@ -241,11 +241,11 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-## 📞 Support
+## ðŸ“ž Support
 
 - Telegram: [@CryptoCrushBot](https://t.me/CryptoCrushBot)
-- Email: support@dilink.click
+- Email: support@magiamhot.io.vn
 
 ---
 
-Made with ❤️ for the Telegram Mini Apps ecosystem
+Made with â¤ï¸ for the Telegram Mini Apps ecosystem

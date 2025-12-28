@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 # =====================================================
 # CryptoCrush SocialFi - Local VPS Deployment Script
@@ -17,7 +17,7 @@ NC='\033[0m'
 
 # Configuration
 APP_DIR="/var/www/SocialFi"
-DOMAIN="dilink.click"
+DOMAIN="magiamhot.io.vn"
 BACKUP_DIR="/var/backups/cryptocrush"
 
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -224,8 +224,8 @@ configure_env() {
             log_info ".env already configured for production"
             
             # Just ensure CORS is correct
-            if ! grep -q "CORS_ORIGIN=https://dilink.click" "$ENV_FILE"; then
-                sed -i 's|CORS_ORIGIN=.*|CORS_ORIGIN=https://dilink.click|' "$ENV_FILE"
+            if ! grep -q "CORS_ORIGIN=https://magiamhot.io.vn" "$ENV_FILE"; then
+                sed -i 's|CORS_ORIGIN=.*|CORS_ORIGIN=https://magiamhot.io.vn|' "$ENV_FILE"
                 log_info "Updated CORS_ORIGIN"
             fi
             
@@ -251,10 +251,10 @@ DB_PASSWORD=Cuongnv@123
 BOT_TOKEN=8450445506:AAHTteZ8NBswolK9N91y7d-cet9q5flIloE
 
 # CORS
-CORS_ORIGIN=https://dilink.click
+CORS_ORIGIN=https://magiamhot.io.vn
 
 # TON Connect
-TONCONNECT_MANIFEST_URL=https://dilink.click/tonconnect-manifest.json
+TONCONNECT_MANIFEST_URL=https://magiamhot.io.vn/tonconnect-manifest.json
 EOF
 
     log_success "Environment configured!"
@@ -304,7 +304,7 @@ configure_nginx() {
     fi
     
     # Check if SSL cert exists to decide which config to use
-    if [ -f "/etc/letsencrypt/live/dilink.click/fullchain.pem" ]; then
+    if [ -f "/etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem" ]; then
         log_info "SSL certificate found, using HTTPS config..."
         
         cat > "$NGINX_CONF" << 'EOF'
@@ -321,7 +321,7 @@ upstream cryptocrush_api {
 server {
     listen 80;
     listen [::]:80;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
     
     location /.well-known/acme-challenge/ {
         root /var/www/html;
@@ -335,10 +335,10 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
     
-    ssl_certificate /etc/letsencrypt/live/dilink.click/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dilink.click/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/magiamhot.io.vn/privkey.pem;
     
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
@@ -404,7 +404,7 @@ upstream cryptocrush_api {
 server {
     listen 80;
     listen [::]:80;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
     
     add_header X-Frame-Options "ALLOWALL" always;
     add_header X-Content-Type-Options "nosniff" always;
@@ -480,9 +480,9 @@ setup_ssl() {
     log_info "Checking SSL certificate..."
     
     # Check if certificate already exists and is valid
-    if [ -f "/etc/letsencrypt/live/dilink.click/fullchain.pem" ]; then
+    if [ -f "/etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem" ]; then
         # Check expiry
-        EXPIRY=$(openssl x509 -enddate -noout -in /etc/letsencrypt/live/dilink.click/fullchain.pem 2>/dev/null | cut -d= -f2)
+        EXPIRY=$(openssl x509 -enddate -noout -in /etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem 2>/dev/null | cut -d= -f2)
         log_info "SSL certificate exists, expires: $EXPIRY"
         
         # Try to renew if needed
@@ -501,8 +501,8 @@ setup_ssl() {
     configure_nginx
     
     # Get certificate
-    certbot certonly --webroot -w /var/www/html -d dilink.click -d www.dilink.click \
-        --non-interactive --agree-tos --email admin@dilink.click || {
+    certbot certonly --webroot -w /var/www/html -d magiamhot.io.vn -d www.magiamhot.io.vn \
+        --non-interactive --agree-tos --email admin@magiamhot.io.vn || {
         log_error "Failed to get SSL certificate. Make sure DNS is pointing to this server."
         return 1
     }
@@ -565,11 +565,11 @@ create_tonconnect_manifest() {
     
     cat > "$MANIFEST_FILE" << 'EOF'
 {
-  "url": "https://dilink.click",
+  "url": "https://magiamhot.io.vn",
   "name": "CryptoCrush",
-  "iconUrl": "https://dilink.click/logo192.png",
-  "termsOfUseUrl": "https://dilink.click/terms",
-  "privacyPolicyUrl": "https://dilink.click/privacy"
+  "iconUrl": "https://magiamhot.io.vn/logo192.png",
+  "termsOfUseUrl": "https://magiamhot.io.vn/terms",
+  "privacyPolicyUrl": "https://magiamhot.io.vn/privacy"
 }
 EOF
 
@@ -633,8 +633,8 @@ check_status() {
     
     # SSL
     echo -n "SSL Certificate: "
-    if [ -f "/etc/letsencrypt/live/dilink.click/fullchain.pem" ]; then
-        openssl x509 -enddate -noout -in /etc/letsencrypt/live/dilink.click/fullchain.pem 2>/dev/null | cut -d= -f2
+    if [ -f "/etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem" ]; then
+        openssl x509 -enddate -noout -in /etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem 2>/dev/null | cut -d= -f2
     else
         echo "Not configured"
     fi

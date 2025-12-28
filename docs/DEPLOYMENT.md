@@ -1,10 +1,10 @@
-# CryptoCrush SocialFi - Deployment Guide
+﻿# CryptoCrush SocialFi - Deployment Guide
 
 ## Overview
 This guide covers the complete deployment of CryptoCrush SocialFi Dating Telegram Mini App to a VPS server.
 
 **Target Server:** 72.61.114.103  
-**Domain:** dilink.click  
+**Domain:** magiamhot.io.vn  
 **Repository:** https://github.com/cuongccna/SocialFi.git
 
 ---
@@ -93,10 +93,10 @@ PGPASSWORD=YOUR_PASSWORD
 TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN
 
 # CORS
-CORS_ORIGIN=https://dilink.click
+CORS_ORIGIN=https://magiamhot.io.vn
 
 # TonConnect
-TONCONNECT_MANIFEST_URL=https://dilink.click/tonconnect-manifest.json
+TONCONNECT_MANIFEST_URL=https://magiamhot.io.vn/tonconnect-manifest.json
 ```
 
 ## Step 5: Setup PostgreSQL Database
@@ -197,7 +197,7 @@ nano /etc/nginx/sites-available/cryptocrush
 server {
     listen 80;
     listen [::]:80;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
 
     # Redirect HTTP to HTTPS
     return 301 https://$server_name$request_uri;
@@ -206,11 +206,11 @@ server {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name dilink.click www.dilink.click;
+    server_name magiamhot.io.vn www.magiamhot.io.vn;
 
     # SSL certificates (configured by certbot)
-    ssl_certificate /etc/letsencrypt/live/dilink.click/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dilink.click/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/magiamhot.io.vn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/magiamhot.io.vn/privkey.pem;
     
     # SSL settings
     ssl_session_timeout 1d;
@@ -284,7 +284,7 @@ apt install -y certbot python3-certbot-nginx
 
 ### Get SSL Certificate
 ```bash
-certbot --nginx -d dilink.click -d www.dilink.click
+certbot --nginx -d magiamhot.io.vn -d www.magiamhot.io.vn
 ```
 
 ### Auto-Renewal
@@ -296,13 +296,13 @@ systemctl enable certbot.timer
 
 ### Update Bot WebApp URL in BotFather
 1. Open @BotFather in Telegram
-2. Send `/mybots` → Select your bot
-3. Bot Settings → Menu Button → Edit
-4. Set URL: `https://dilink.click`
+2. Send `/mybots` â†’ Select your bot
+3. Bot Settings â†’ Menu Button â†’ Edit
+4. Set URL: `https://magiamhot.io.vn`
 
 ### Configure Web App
-1. Bot Settings → Web App
-2. Set Web App URL: `https://dilink.click`
+1. Bot Settings â†’ Web App
+2. Set Web App URL: `https://magiamhot.io.vn`
 
 ---
 
@@ -347,7 +347,7 @@ pg_dump -U CryptoCrush_user -d CryptoCrush_db > backup_$(date +%Y%m%d).sql
 1. Check PM2: `pm2 status`
 2. Check logs: `pm2 logs cryptocrush-api`
 3. Check Nginx: `systemctl status nginx`
-4. Check SSL: `curl -I https://dilink.click`
+4. Check SSL: `curl -I https://magiamhot.io.vn`
 
 ### Database Connection Issues
 1. Check PostgreSQL: `systemctl status postgresql`
@@ -381,41 +381,41 @@ pm2 save
 ## Architecture Overview
 
 ```
-                    ┌─────────────────┐
-                    │   Telegram      │
-                    │   Bot/WebApp    │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │  CloudFlare     │
-                    │  (optional CDN) │
-                    └────────┬────────┘
-                             │
-                             ▼
-┌────────────────────────────────────────────────────┐
-│                VPS: 72.61.114.103                  │
-│  ┌──────────────────────────────────────────────┐  │
-│  │              Nginx (Port 443/80)             │  │
-│  │  - SSL Termination                           │  │
-│  │  - Static file serving                       │  │
-│  │  - Reverse proxy to Node.js                  │  │
-│  └──────────────┬───────────────────────────────┘  │
-│                 │                                   │
-│       ┌─────────┴─────────┐                        │
-│       ▼                   ▼                        │
-│  ┌─────────────┐   ┌─────────────────────┐        │
-│  │   Static    │   │   PM2 → Node.js     │        │
-│  │   Files     │   │   (Port 3000)       │        │
-│  │  /dist/*    │   │   API Backend       │        │
-│  └─────────────┘   └──────────┬──────────┘        │
-│                               │                    │
-│                               ▼                    │
-│                    ┌─────────────────────┐        │
-│                    │    PostgreSQL       │        │
-│                    │    (Port 5432)      │        │
-│                    └─────────────────────┘        │
-└────────────────────────────────────────────────────┘
+                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                    â”‚   Telegram      â”‚
+                    â”‚   Bot/WebApp    â”‚
+                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â–¼
+                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                    â”‚  CloudFlare     â”‚
+                    â”‚  (optional CDN) â”‚
+                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                             â”‚
+                             â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                VPS: 72.61.114.103                  â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â”‚
+â”‚  â”‚              Nginx (Port 443/80)             â”‚  â”‚
+â”‚  â”‚  - SSL Termination                           â”‚  â”‚
+â”‚  â”‚  - Static file serving                       â”‚  â”‚
+â”‚  â”‚  - Reverse proxy to Node.js                  â”‚  â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â”‚
+â”‚                 â”‚                                   â”‚
+â”‚       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”                        â”‚
+â”‚       â–¼                   â–¼                        â”‚
+â”‚  â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”        â”‚
+â”‚  â”‚   Static    â”‚   â”‚   PM2 â†’ Node.js     â”‚        â”‚
+â”‚  â”‚   Files     â”‚   â”‚   (Port 3000)       â”‚        â”‚
+â”‚  â”‚  /dist/*    â”‚   â”‚   API Backend       â”‚        â”‚
+â”‚  â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜        â”‚
+â”‚                               â”‚                    â”‚
+â”‚                               â–¼                    â”‚
+â”‚                    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”        â”‚
+â”‚                    â”‚    PostgreSQL       â”‚        â”‚
+â”‚                    â”‚    (Port 5432)      â”‚        â”‚
+â”‚                    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜        â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ---
