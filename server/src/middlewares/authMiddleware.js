@@ -129,8 +129,9 @@ async function authMiddleware(req, res, next) {
     // =========================================
     // DEVELOPMENT MODE BYPASS
     // Allow testing without real Telegram initData
+    // Set DEV_BYPASS_AUTH=true in .env to enable
     // =========================================
-    if (process.env.NODE_ENV === 'development' && process.env.DEV_BYPASS_AUTH === 'true') {
+    if (process.env.DEV_BYPASS_AUTH === 'true') {
       // Check for dev auth header format: "DevAuth telegram_id"
       if (authHeader && authHeader.startsWith('DevAuth ')) {
         const telegramId = authHeader.slice(8);
