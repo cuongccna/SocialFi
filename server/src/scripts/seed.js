@@ -6,7 +6,7 @@
  */
 
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const { Pool } = require('pg');
 
@@ -17,9 +17,9 @@ const { Pool } = require('pg');
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'cryptocrush',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'CryptoCrush_db',
+  user: process.env.DB_USER || 'CryptoCrush_user',
+  password: process.env.DB_PASSWORD || 'Cuongnv@123',
 });
 
 // ============================================

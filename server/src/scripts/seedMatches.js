@@ -3,8 +3,19 @@
  * Creates test relationships and messages for development
  */
 
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
-const pool = require('../config/db');
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
+const { Pool } = require('pg');
+
+// Database connection
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || 'CryptoCrush_db',
+  user: process.env.DB_USER || 'CryptoCrush_user',
+  password: process.env.DB_PASSWORD || 'Cuongnv@123',
+});
 
 async function seedMatches() {
   console.log('🌱 Seeding test matches...\n');

@@ -23,10 +23,11 @@ const pool = new Pool({
 });
 
 // VIP Profiles Data - Beautiful KOL/Model profiles
+// Using fake telegram_id starting from 9900000001 (unlikely to conflict with real IDs)
 const VIP_PROFILES = [
   // Female VIPs
   {
-    telegram_id: 'vip_female_001',
+    telegram_id: 9900000001,
     username: 'crypto_queen_luna',
     display_name: 'Luna Chen 🌙',
     bio: '💎 DeFi Queen | 500+ ETH Staked | Building the future of Web3 | Tokyo 🗼',
@@ -38,7 +39,7 @@ const VIP_PROFILES = [
     longitude: 106.7009,
   },
   {
-    telegram_id: 'vip_female_002',
+    telegram_id: 9900000002,
     username: 'nft_princess_mia',
     display_name: 'Mia Nakamoto ✨',
     bio: '🎨 NFT Artist | Bored Ape Holder | Sold 100+ ETH in art | Love sushi 🍣',
@@ -50,7 +51,7 @@ const VIP_PROFILES = [
     longitude: 106.6950,
   },
   {
-    telegram_id: 'vip_female_003',
+    telegram_id: 9900000003,
     username: 'defi_diva_sarah',
     display_name: 'Sarah Kim 💫',
     bio: '📈 Yield Farmer | $2M TVL | Ex-Goldman | Wine lover 🍷',
@@ -62,7 +63,7 @@ const VIP_PROFILES = [
     longitude: 106.6800,
   },
   {
-    telegram_id: 'vip_female_004',
+    telegram_id: 9900000004,
     username: 'metaverse_maya',
     display_name: 'Maya Tanaka 🦋',
     bio: '🌐 Metaverse Builder | Decentraland OG | Virtual Real Estate Mogul',
@@ -74,7 +75,7 @@ const VIP_PROFILES = [
     longitude: 106.7100,
   },
   {
-    telegram_id: 'vip_female_005',
+    telegram_id: 9900000005,
     username: 'sol_goddess_amy',
     display_name: 'Amy Solana ☀️',
     bio: '⚡ Solana Maxi | 10K SOL Staked | Speed is everything | Yoga 🧘‍♀️',
@@ -86,7 +87,7 @@ const VIP_PROFILES = [
     longitude: 106.6850,
   },
   {
-    telegram_id: 'vip_female_006',
+    telegram_id: 9900000006,
     username: 'trading_queen_lisa',
     display_name: 'Lisa Trading 📊',
     bio: '💰 Professional Trader | 85% Win Rate | Turned $10K → $1M | Coffee addict ☕',
@@ -98,7 +99,7 @@ const VIP_PROFILES = [
     longitude: 106.7050,
   },
   {
-    telegram_id: 'vip_female_007',
+    telegram_id: 9900000007,
     username: 'dao_queen_emma',
     display_name: 'Emma DAO 🏛️',
     bio: '🗳️ Governance Queen | 5 DAOs Council | Web3 Advocate | Piano 🎹',
@@ -110,7 +111,7 @@ const VIP_PROFILES = [
     longitude: 106.6900,
   },
   {
-    telegram_id: 'vip_female_008',
+    telegram_id: 9900000008,
     username: 'btc_baroness_jade',
     display_name: 'Jade Bitcoin 🔶',
     bio: '₿ Bitcoin Maximalist | HODL since 2015 | 21M Club | Hiking 🏔️',
@@ -122,7 +123,7 @@ const VIP_PROFILES = [
     longitude: 106.7000,
   },
   {
-    telegram_id: 'vip_female_009',
+    telegram_id: 9900000009,
     username: 'layer2_lily',
     display_name: 'Lily Layer2 ⚡',
     bio: '🚀 L2 Researcher | Optimism Delegate | Rollup Enthusiast | Cats 🐱',
@@ -134,7 +135,7 @@ const VIP_PROFILES = [
     longitude: 106.7150,
   },
   {
-    telegram_id: 'vip_female_010',
+    telegram_id: 9900000010,
     username: 'ai_crypto_alice',
     display_name: 'Alice AI 🤖',
     bio: '🧠 AI + Crypto Researcher | Building autonomous agents | PhD Stanford',
@@ -148,7 +149,7 @@ const VIP_PROFILES = [
 
   // Male VIPs
   {
-    telegram_id: 'vip_male_001',
+    telegram_id: 9900000011,
     username: 'whale_hunter_alex',
     display_name: 'Alex Whale 🐋',
     bio: '🔱 Whale Alert OG | $50M+ Portfolio | Early BTC Investor | Yacht Life ⛵',
@@ -160,7 +161,7 @@ const VIP_PROFILES = [
     longitude: 106.7020,
   },
   {
-    telegram_id: 'vip_male_002',
+    telegram_id: 9900000012,
     username: 'defi_chad_mike',
     display_name: 'Mike DeFi 💪',
     bio: '🏋️ DeFi Degen | Aave Protocol Team | Built 3 protocols | Gym bro',
@@ -172,7 +173,7 @@ const VIP_PROFILES = [
     longitude: 106.6920,
   },
   {
-    telegram_id: 'vip_male_003',
+    telegram_id: 9900000013,
     username: 'nft_king_jason',
     display_name: 'Jason NFT King 👑',
     bio: '👑 NFT Flipper | Made $5M on JPEGs | CryptoPunks Collector | Sneakers 👟',
@@ -184,7 +185,7 @@ const VIP_PROFILES = [
     longitude: 106.7080,
   },
   {
-    telegram_id: 'vip_male_004',
+    telegram_id: 9900000014,
     username: 'eth_maxi_david',
     display_name: 'David ETH 💎',
     bio: '💎 Ethereum Believer | Staking 1000+ ETH | Vitalik Stan | Coffee ☕',
@@ -196,7 +197,7 @@ const VIP_PROFILES = [
     longitude: 106.6870,
   },
   {
-    telegram_id: 'vip_male_005',
+    telegram_id: 9900000015,
     username: 'trading_legend_tom',
     display_name: 'Tom Trader 📈',
     bio: '📊 Legendary Trader | $100M Traded Volume | Never Liquidated | Cigars 🚬',
@@ -208,7 +209,7 @@ const VIP_PROFILES = [
     longitude: 106.7030,
   },
   {
-    telegram_id: 'vip_male_006',
+    telegram_id: 9900000016,
     username: 'vc_boss_ryan',
     display_name: 'Ryan VC 🦈',
     bio: '💼 Crypto VC Partner | Invested in 50+ Startups | a]Board Member | Golf ⛳',
@@ -220,7 +221,7 @@ const VIP_PROFILES = [
     longitude: 106.6950,
   },
   {
-    telegram_id: 'vip_male_007',
+    telegram_id: 9900000017,
     username: 'memecoin_master_kevin',
     display_name: 'Kevin Meme 🐸',
     bio: '🐸 Meme Lord | Turned $100 → $10M on PEPE | Degen Life | Lambo 🏎️',
@@ -232,7 +233,7 @@ const VIP_PROFILES = [
     longitude: 106.7100,
   },
   {
-    telegram_id: 'vip_male_008',
+    telegram_id: 9900000018,
     username: 'gamefi_pro_lucas',
     display_name: 'Lucas GameFi 🎮',
     bio: '🎮 GameFi Whale | Top 10 Axie Player | Owns Virtual Land Empire | Esports',
@@ -244,7 +245,7 @@ const VIP_PROFILES = [
     longitude: 106.6890,
   },
   {
-    telegram_id: 'vip_male_009',
+    telegram_id: 9900000019,
     username: 'zk_wizard_chris',
     display_name: 'Chris ZK 🧙‍♂️',
     bio: '🔐 ZK-Proof Expert | Privacy Maxi | Building zkApps | Math PhD 🎓',
@@ -256,7 +257,7 @@ const VIP_PROFILES = [
     longitude: 106.7040,
   },
   {
-    telegram_id: 'vip_male_010',
+    telegram_id: 9900000020,
     username: 'crosschain_king_max',
     display_name: 'Max Bridge 🌉',
     bio: '🌉 Cross-Chain OG | Bridged $500M+ | Multi-Chain Maxi | Surfing 🏄',
