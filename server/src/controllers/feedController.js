@@ -447,6 +447,8 @@ async function getTrending(req, res, next) {
 async function debugFeed(req, res, next) {
   try {
     const userId = req.user?.id || null;
+    // Allow testing with specific telegram_id via query param
+    const testTelegramId = req.query.telegram_id;
     
     // Check total users
     const totalUsersResult = await query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE');
@@ -471,7 +473,55 @@ async function debugFeed(req, res, next) {
       functionExists = false;
     }
     
-    // Check swipes count for current user
+    // If telegram_id provided, find user and simulate feed
+    let testUserInfo = null;
+    let testFeedResult = null;
+    if (testTelegramId) {
+      const userResult = await query('SELECT id, telegram_id, display_name FROM users WHERE telegram_id = $1', [testTelegramId]);
+      if (userResult.rows.length > 0) {
+        const testUser = userResult.rows[0];
+        testUserInfo = testUser;
+        
+        // Count swipes for this user
+        const swipesResult = await query('SELECT COUNT(*) as count FROM swipes WHERE actor_id = $1', [testUser.id]);
+        const swipeCount = parseInt(swipesResult.rows[0].count);
+        
+        // Try to get feed for this user
+        const feedQuery = `
+          SELECT 
+            u.id,
+            u.telegram_id,
+            u.display_name,
+            u.wallet_rank,
+            u.market_price,
+            u.is_vip,
+            ROUND(calculate_distance_km(10.8231, 106.6297, u.latitude, u.longitude)::numeric, 2) AS distance_km
+          FROM users u
+          WHERE u.id != $1
+            AND u.is_active = TRUE
+            AND u.latitude IS NOT NULL
+            AND u.longitude IS NOT NULL
+            AND u.id NOT IN (
+              SELECT target_id 
+              FROM swipes 
+              WHERE actor_id = $1
+            )
+          ORDER BY u.market_price DESC
+          LIMIT 10;
+        `;
+        const feedResult = await query(feedQuery, [testUser.id]);
+        
+        testFeedResult = {
+          userId: testUser.id,
+          displayName: testUser.display_name,
+          swipeCount,
+          availableProfiles: feedResult.rows.length,
+          profiles: feedResult.rows,
+        };
+      }
+    }
+    
+    // Check swipes count for authenticated user
     let userSwipes = 0;
     if (userId) {
       const swipesResult = await query('SELECT COUNT(*) as count FROM swipes WHERE actor_id = $1', [userId]);
@@ -487,15 +537,22 @@ async function debugFeed(req, res, next) {
       LIMIT 10
     `);
     
+    // Get total swipes in system
+    const totalSwipesResult = await query('SELECT COUNT(*) as count FROM swipes');
+    const totalSwipes = parseInt(totalSwipesResult.rows[0].count);
+    
     res.json({
       success: true,
       debug: {
         totalUsers,
         vipUsers,
         usersWithLocation,
+        totalSwipes,
         functionExists,
         currentUserId: userId,
         userSwipes,
+        testUserInfo,
+        testFeedResult,
         sampleUsers: sampleUsersResult.rows,
       },
     });
