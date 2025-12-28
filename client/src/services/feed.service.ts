@@ -28,12 +28,13 @@ export async function getFeed(
   if (latitude) params.lat = latitude;
   if (longitude) params.lng = longitude;
 
-  const response = await api.get<{ success: boolean; users: FeedUser[] }>(
+  const response = await api.get<{ success: boolean; data: { users: FeedUser[] } }>(
     '/feed',
     { params }
   );
 
-  return response.users || [];
+  // Backend returns { success: true, data: { users: [...] } }
+  return response.data?.users || [];
 }
 
 /**
