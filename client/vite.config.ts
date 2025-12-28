@@ -21,9 +21,11 @@ export default defineConfig({
       '.trycloudflare.com',
     ],
     // Proxy API requests to backend to avoid CORS issues during development
+    // For local dev: use http://localhost:3005
+    // For testing with VPS: use https://dilink.click
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_API_TARGET || 'http://localhost:3005',
         changeOrigin: true,
         secure: false,
       },
