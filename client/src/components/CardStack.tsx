@@ -531,91 +531,98 @@ function SwipeCard({
 
         {/* Content - Hidden when mystery */}
         {!showMystery && (
-          <div className="relative z-10 h-full flex flex-col p-5 gap-4">
-            {/* Top Row: Rank & Distance */}
-            <div className="flex items-center justify-between">
-              <div className={`px-3 py-1.5 rounded-full border flex items-center gap-2 ${rankConfig.class}`}>
-                <Wallet className="w-4 h-4" />
-                <span className="text-sm font-medium">{rankConfig.emoji} {rankConfig.label}</span>
-              </div>
-              
-              {profile.distance_km && (
-                <div className="flex items-center gap-1.5 text-white/60 text-sm">
-                  <MapPin className="w-4 h-4" />
-                  <span>{parseFloat(String(profile.distance_km)).toFixed(1)} km</span>
-                </div>
-              )}
-            </div>
-
-            {/* Name & Username */}
-            <div>
-              <h2 className="text-3xl font-bold text-white">
-                {profile.display_name}
-              </h2>
-              {profile.username && (
-                <p className="text-white/50 text-lg">@{profile.username}</p>
-              )}
-            </div>
-
-            {/* Bio */}
-            {profile.bio && (
-              <p className="text-white/70 text-base leading-relaxed line-clamp-2">
-                {profile.bio}
-              </p>
-            )}
-
-            {/* Price Card */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-4 border border-white/10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-white/50 text-sm">Market Price</p>
-                    {isTop && (
-                      <span className="flex items-center gap-1 text-xs text-white/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                        LIVE
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <motion.span
-                      className={`text-3xl font-bold transition-colors duration-300 ${
-                        priceDirection === 'up' 
-                          ? 'text-primary' 
-                          : priceDirection === 'down' 
-                            ? 'text-danger' 
-                            : 'text-white'
-                      }`}
-                      animate={priceFlash ? { scale: [1, 1.05, 1] } : {}}
-                      transition={{ duration: 0.2 }}
-                    >
-                      ${livePrice.toFixed(2)}
-                    </motion.span>
-                    <div className={`flex items-center gap-1 text-sm font-medium ${priceUp ? 'text-primary' : 'text-danger'}`}>
-                      {priceUp ? (
-                        <TrendingUp className="w-4 h-4" />
-                      ) : (
-                        <TrendingDown className="w-4 h-4" />
-                      )}
-                      <span>
-                        {priceUp ? '+' : ''}{profile.price_change_24h.toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
+          <div className="relative z-10 h-full flex flex-col p-5">
+            {/* Spacer to push content down */}
+            <div className="flex-1 min-h-[40%]" />
+            
+            {/* Main Content Area */}
+            <div className="flex flex-col gap-3">
+              {/* Rank Badge */}
+              <div className="flex items-center gap-2">
+                <div className={`px-3 py-1.5 rounded-full border flex items-center gap-2 ${rankConfig.class}`}>
+                  <Wallet className="w-4 h-4" />
+                  <span className="text-sm font-medium">{rankConfig.emoji} {rankConfig.label}</span>
                 </div>
                 
-                {/* Mini Chart */}
-                <MiniPriceChart priceChange={profile.price_change_24h} />
+                {/* Distance Badge */}
+                {profile.distance_km && (
+                  <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm rounded-full px-3 py-1.5">
+                    <MapPin className="w-4 h-4 text-white/70" />
+                    <span className="text-sm text-white/70">{parseFloat(String(profile.distance_km)).toFixed(1)} km</span>
+                  </div>
+                )}
               </div>
-            </div>
 
-            {/* Swipe Hint (only for top card) */}
-            {isTop && (
-              <div className="flex justify-center gap-12 text-sm pt-2">
-                <span className="text-danger/70 font-medium">← SHORT</span>
-                <span className="text-primary/70 font-medium">LONG →</span>
+              {/* Name & Username */}
+              <div>
+                <h2 className="text-3xl font-bold text-white">
+                  {profile.display_name}
+                </h2>
+                {profile.username && (
+                  <p className="text-white/50 text-lg">@{profile.username}</p>
+                )}
               </div>
-            )}
+
+              {/* Bio */}
+              {profile.bio && (
+                <p className="text-white/70 text-base leading-relaxed line-clamp-2">
+                  {profile.bio}
+                </p>
+              )}
+
+              {/* Price Card */}
+              <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-4 border border-white/10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-white/50 text-sm">Market Price</p>
+                      {isTop && (
+                        <span className="flex items-center gap-1 text-xs text-white/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <motion.span
+                        className={`text-3xl font-bold transition-colors duration-300 ${
+                          priceDirection === 'up' 
+                            ? 'text-primary' 
+                            : priceDirection === 'down' 
+                              ? 'text-danger' 
+                              : 'text-white'
+                        }`}
+                        animate={priceFlash ? { scale: [1, 1.05, 1] } : {}}
+                        transition={{ duration: 0.2 }}
+                      >
+                        ${livePrice.toFixed(2)}
+                      </motion.span>
+                      <div className={`flex items-center gap-1 text-sm font-medium ${priceUp ? 'text-primary' : 'text-danger'}`}>
+                        {priceUp ? (
+                          <TrendingUp className="w-4 h-4" />
+                        ) : (
+                          <TrendingDown className="w-4 h-4" />
+                        )}
+                        <span>
+                          {priceUp ? '+' : ''}{profile.price_change_24h.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Mini Chart */}
+                  <MiniPriceChart priceChange={profile.price_change_24h} />
+                </div>
+              </div>
+
+              {/* Swipe Hint (only for top card) */}
+              {isTop && (
+                <div className="flex justify-center gap-12 text-sm pt-2">
+                  <span className="text-danger/70 font-medium">← SHORT</span>
+                  <span className="text-primary/70 font-medium">LONG →</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </motion.div>
