@@ -8,20 +8,28 @@ const { getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const config = require('../config');
 
+// Bonus multipliers
+const BONUS_MULTIPLIERS = {
+  MYSTERY_CARD: 100,    // x100 $LOVE when unlocking mystery card
+  VIP_WHALE: 50,        // x50 $LOVE when matching with Whale VIP
+  VIP_SHARK: 25,        // x25 $LOVE when matching with Shark VIP
+  WHALE_MATCH: 10,      // x10 $LOVE when matching with any Whale
+};
+
 /**
  * POST /swipe
  * Process a swipe action with transaction
  * - Insert swipe record
  * - Update target's market price
  * - Check for match if LIKE
- * - Award $LOVE tokens
+ * - Award $LOVE tokens (with bonuses for Mystery/VIP)
  */
 async function swipe(req, res, next) {
   const client = await getClient();
   
   try {
     const actorId = req.user.id;
-    const { target_id: targetId, action } = req.body;
+    const { target_id: targetId, action, is_mystery: isMystery } = req.body;
     
     // Validate input
     if (!targetId) {
@@ -42,13 +50,15 @@ async function swipe(req, res, next) {
     
     // 1. Check if target user exists
     const targetCheck = await client.query(
-      'SELECT id, display_name, market_price FROM users WHERE id = $1 AND is_active = TRUE',
+      'SELECT id, display_name, market_price, wallet_rank, is_vip FROM users WHERE id = $1 AND is_active = TRUE',
       [targetId]
     );
     
     if (targetCheck.rows.length === 0) {
       throw new ApiError(404, 'Target user not found');
     }
+    
+    const targetUser = targetCheck.rows[0];
     
     // 2. Check if already swiped
     const existingSwipe = await client.query(
@@ -107,13 +117,41 @@ async function swipe(req, res, next) {
       newPrice = priceResult.rows[0].market_price;
     }
     
-    // 5. Award $LOVE tokens to actor (mining reward)
+    // 5. Calculate $LOVE tokens with bonuses
+    let baseReward = config.constants.LOVE_PER_SWIPE;
+    let bonusMultiplier = 1;
+    let bonusReason = null;
+    
+    // Mystery Card Bonus: x100 when swiping right on mystery card
+    if (isMystery && (action === 'LIKE' || action === 'SUPER')) {
+      bonusMultiplier = BONUS_MULTIPLIERS.MYSTERY_CARD;
+      bonusReason = 'MYSTERY_UNLOCK';
+    }
+    // VIP Bonus: Extra rewards for VIP profiles
+    else if (targetUser.is_vip && (action === 'LIKE' || action === 'SUPER')) {
+      if (targetUser.wallet_rank === 'WHALE') {
+        bonusMultiplier = BONUS_MULTIPLIERS.VIP_WHALE;
+        bonusReason = 'VIP_WHALE';
+      } else if (targetUser.wallet_rank === 'SHARK') {
+        bonusMultiplier = BONUS_MULTIPLIERS.VIP_SHARK;
+        bonusReason = 'VIP_SHARK';
+      }
+    }
+    // Whale Bonus: Extra for any Whale (non-VIP)
+    else if (targetUser.wallet_rank === 'WHALE' && (action === 'LIKE' || action === 'SUPER')) {
+      bonusMultiplier = BONUS_MULTIPLIERS.WHALE_MATCH;
+      bonusReason = 'WHALE_LIKE';
+    }
+    
+    const totalReward = baseReward * bonusMultiplier;
+    
+    // Award $LOVE tokens to actor
     await client.query(`
       UPDATE users 
       SET balance_love = balance_love + $1,
           updated_at = NOW()
       WHERE id = $2;
-    `, [config.constants.LOVE_PER_SWIPE, actorId]);
+    `, [totalReward, actorId]);
     
     // 6. Check for match (only if LIKE or SUPER)
     let isMatch = false;
@@ -169,10 +207,28 @@ async function swipe(req, res, next) {
           new_price: parseFloat(newPrice.toFixed(4)),
         },
         reward: {
-          love_earned: config.constants.LOVE_PER_SWIPE,
+          love_earned: totalReward,
+          base_reward: baseReward,
+          bonus_multiplier: bonusMultiplier,
+          bonus_reason: bonusReason,
+        },
+        target_info: {
+          is_vip: targetUser.is_vip,
+          wallet_rank: targetUser.wallet_rank,
         },
       },
     };
+    
+    // Add bonus message if applicable
+    if (bonusReason) {
+      const bonusMessages = {
+        MYSTERY_UNLOCK: `🎁 MYSTERY JACKPOT! x${bonusMultiplier} $LOVE earned!`,
+        VIP_WHALE: `🐋 VIP WHALE BONUS! x${bonusMultiplier} $LOVE earned!`,
+        VIP_SHARK: `🦈 VIP SHARK BONUS! x${bonusMultiplier} $LOVE earned!`,
+        WHALE_LIKE: `🐋 WHALE BONUS! x${bonusMultiplier} $LOVE earned!`,
+      };
+      response.data.reward.bonus_message = bonusMessages[bonusReason];
+    }
     
     if (isMatch && relationship) {
       response.data.relationship = {

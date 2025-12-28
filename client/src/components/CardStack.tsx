@@ -1,9 +1,14 @@
 /**
- * CardStack Component
+ * CardStack Component - ADDICTIVE UX VERSION
  * Tinder-style swipeable card stack with crypto trading theme
+ * 
+ * Features:
+ * - Mystery Card every 5 swipes (blurred, unlock with swipe right)
+ * - Jackpot Effect when matching with Whale (haptic + fireworks)
+ * - Infinite Loading (prefetch when 3 cards left)
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   motion,
   useMotionValue,
@@ -11,7 +16,7 @@ import {
   type PanInfo,
   AnimatePresence,
 } from 'framer-motion';
-import { TrendingUp, TrendingDown, MapPin, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, MapPin, Wallet, HelpCircle, Sparkles, Lock } from 'lucide-react';
 import { haptic } from '../utils/telegram';
 import type { FeedUser } from '../types';
 
@@ -19,17 +24,198 @@ import type { FeedUser } from '../types';
 // Types
 // ============================================
 
+interface SwipeInfo {
+  isMystery: boolean;
+  isVip: boolean;
+  isWhale: boolean;
+}
+
 interface CardStackProps {
   profiles: FeedUser[];
-  onSwipe: (direction: 'left' | 'right', profile: FeedUser) => void;
+  onSwipe: (direction: 'left' | 'right', profile: FeedUser, swipeInfo: SwipeInfo) => void;
   onEmpty?: () => void;
+  onNeedMore?: () => void; // Callback for infinite loading
 }
 
 interface SwipeCardProps {
   profile: FeedUser;
-  onSwipe: (direction: 'left' | 'right') => void;
+  onSwipe: (direction: 'left' | 'right', swipeInfo: SwipeInfo) => void;
   isTop: boolean;
   index: number;
+  isMystery?: boolean;
+  onMysteryUnlock?: () => void;
+  onWhaleMatch?: () => void;
+}
+
+// Mystery Card interval
+const MYSTERY_CARD_INTERVAL = 5;
+const PREFETCH_THRESHOLD = 3; // Fetch more when this many cards left
+
+// ============================================
+// Fireworks Effect Component
+// ============================================
+
+function FireworksEffect({ show, onComplete }: { show: boolean; onComplete: () => void }) {
+  useEffect(() => {
+    if (show) {
+      const timer = setTimeout(onComplete, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [show, onComplete]);
+
+  if (!show) return null;
+
+  const particles = Array.from({ length: 30 }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    delay: Math.random() * 0.5,
+    duration: 0.5 + Math.random() * 0.5,
+    color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'][Math.floor(Math.random() * 6)],
+  }));
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+      {/* Jackpot Banner */}
+      <motion.div
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -100, opacity: 0 }}
+        className="absolute top-20 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-500 px-8 py-4 rounded-2xl shadow-2xl"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-4xl">🐋</span>
+          <div>
+            <p className="text-black font-black text-xl">WHALE ALERT!</p>
+            <p className="text-black/70 text-sm">Bạn vừa match với Cá Voi! 💎</p>
+          </div>
+          <span className="text-4xl">🎰</span>
+        </div>
+      </motion.div>
+
+      {/* Particles */}
+      {particles.map((particle) => (
+        <motion.div
+          key={particle.id}
+          className="absolute w-3 h-3 rounded-full"
+          style={{
+            left: `${particle.x}%`,
+            backgroundColor: particle.color,
+          }}
+          initial={{ y: '100vh', opacity: 1, scale: 1 }}
+          animate={{
+            y: `${particle.y}%`,
+            opacity: [1, 1, 0],
+            scale: [1, 1.5, 0],
+          }}
+          transition={{
+            duration: particle.duration,
+            delay: particle.delay,
+            ease: 'easeOut',
+          }}
+        />
+      ))}
+
+      {/* Golden Glow */}
+      <motion.div
+        className="absolute inset-0 bg-gradient-radial from-yellow-500/20 via-transparent to-transparent"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0.5, 0] }}
+        transition={{ duration: 1 }}
+      />
+    </div>
+  );
+}
+
+// ============================================
+// Mystery Card Component
+// ============================================
+
+function MysteryCardOverlay({ onUnlock: _onUnlock }: { onUnlock: () => void }) {
+  return (
+    <div className="absolute inset-0 bg-gradient-to-b from-purple-900/95 via-indigo-900/95 to-black/95 backdrop-blur-xl flex flex-col items-center justify-center z-20 rounded-3xl">
+      {/* Animated Background */}
+      <div className="absolute inset-0 overflow-hidden rounded-3xl">
+        {[...Array(20)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-1 h-1 bg-white/30 rounded-full"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+            }}
+            animate={{
+              opacity: [0.3, 1, 0.3],
+              scale: [1, 1.5, 1],
+            }}
+            transition={{
+              duration: 2 + Math.random() * 2,
+              repeat: Infinity,
+              delay: Math.random() * 2,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Content */}
+      <motion.div
+        animate={{ 
+          scale: [1, 1.05, 1],
+          rotate: [0, 5, -5, 0],
+        }}
+        transition={{ 
+          duration: 2, 
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+        className="relative"
+      >
+        <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-yellow-500 flex items-center justify-center mb-6 shadow-2xl">
+          <HelpCircle className="w-20 h-20 text-white" />
+        </div>
+        <motion.div
+          className="absolute -top-2 -right-2"
+          animate={{ rotate: 360 }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
+        >
+          <Sparkles className="w-8 h-8 text-yellow-400" />
+        </motion.div>
+      </motion.div>
+
+      <h3 className="text-2xl font-black text-white mb-2 text-center">
+        🎁 MYSTERY CARD
+      </h3>
+      
+      <p className="text-white/80 text-center mb-4 px-8">
+        Người này có thể là cơ hội<br/>
+        <span className="text-yellow-400 font-bold text-xl">x100 tài sản</span> của bạn!
+      </p>
+
+      <div className="flex flex-col items-center gap-3 mt-4">
+        <motion.div
+          className="flex items-center gap-2 bg-gradient-to-r from-primary to-green-400 px-6 py-3 rounded-full"
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{ duration: 1, repeat: Infinity }}
+        >
+          <Lock className="w-5 h-5 text-black" />
+          <span className="text-black font-bold">Swipe LONG → để mở khóa</span>
+        </motion.div>
+        
+        <p className="text-white/50 text-sm">
+          hoặc SHORT ← để bỏ qua
+        </p>
+      </div>
+
+      {/* Hint Arrow */}
+      <motion.div
+        className="absolute bottom-20 right-8"
+        animate={{ x: [0, 20, 0] }}
+        transition={{ duration: 1, repeat: Infinity }}
+      >
+        <span className="text-4xl">👉</span>
+      </motion.div>
+    </div>
+  );
 }
 
 // ============================================
@@ -97,8 +283,17 @@ function pointsToPath(points: number[]): string {
 // Single Swipe Card Component
 // ============================================
 
-function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
+function SwipeCard({ 
+  profile, 
+  onSwipe, 
+  isTop, 
+  index, 
+  isMystery = false,
+  onMysteryUnlock,
+  onWhaleMatch,
+}: SwipeCardProps) {
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
+  const [mysteryRevealed, setMysteryRevealed] = useState(false);
   
   // Live Price Ticker state
   const [livePrice, setLivePrice] = useState(profile.market_price);
@@ -107,16 +302,14 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
 
   // Live Price Ticker effect - only for top card
   useEffect(() => {
-    if (!isTop) return;
+    if (!isTop || (isMystery && !mysteryRevealed)) return;
 
     const interval = setInterval(() => {
       setLivePrice((currentPrice) => {
-        // Random change of ±0.1%
-        const changePercent = (Math.random() - 0.5) * 0.2; // -0.1% to +0.1%
+        const changePercent = (Math.random() - 0.5) * 0.2;
         const change = currentPrice * (changePercent / 100);
         const newPrice = Math.max(0.01, currentPrice + change);
 
-        // Determine direction
         if (change > 0) {
           setPriceDirection('up');
         } else if (change < 0) {
@@ -125,7 +318,6 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
           setPriceDirection('neutral');
         }
 
-        // Trigger flash animation
         setPriceFlash(true);
         setTimeout(() => setPriceFlash(false), 300);
 
@@ -134,9 +326,8 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isTop]);
+  }, [isTop, isMystery, mysteryRevealed]);
 
-  // Reset live price when profile changes
   useEffect(() => {
     setLivePrice(profile.market_price);
     setPriceDirection('neutral');
@@ -169,6 +360,13 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
     ]
   );
 
+  // Build swipe info for backend
+  const buildSwipeInfo = (): SwipeInfo => ({
+    isMystery: isMystery || false,
+    isVip: (profile as any).source === 'vip',
+    isWhale: profile.wallet_rank === 'WHALE',
+  });
+
   // Handle drag end
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -176,21 +374,40 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
       const velocity = info.velocity.x;
       const offset = info.offset.x;
 
-      // Check if swipe is strong enough
       if (offset > threshold || velocity > 500) {
         // Swipe RIGHT -> LONG
         setExitDirection('right');
-        haptic.notification('success');
-        setTimeout(() => onSwipe('right'), 100);
+        
+        // Check if Whale -> Jackpot effect!
+        if (profile.wallet_rank === 'WHALE') {
+          // Intense haptic feedback
+          haptic.notification('success');
+          haptic.impact('heavy');
+          setTimeout(() => haptic.impact('heavy'), 100);
+          setTimeout(() => haptic.impact('heavy'), 200);
+          onWhaleMatch?.();
+        } else {
+          haptic.notification('success');
+        }
+        
+        // Mystery card unlock
+        if (isMystery && !mysteryRevealed) {
+          setMysteryRevealed(true);
+          onMysteryUnlock?.();
+          // Don't swipe yet, reveal first - wait a moment then swipe
+          setTimeout(() => onSwipe('right', buildSwipeInfo()), 500);
+          return;
+        }
+        
+        setTimeout(() => onSwipe('right', buildSwipeInfo()), 100);
       } else if (offset < -threshold || velocity < -500) {
         // Swipe LEFT -> SHORT
         setExitDirection('left');
         haptic.notification('warning');
-        setTimeout(() => onSwipe('left'), 100);
+        setTimeout(() => onSwipe('left', buildSwipeInfo()), 100);
       }
-      // Otherwise, spring back (handled by dragConstraints)
     },
-    [onSwipe]
+    [onSwipe, profile, isMystery, mysteryRevealed, onWhaleMatch, onMysteryUnlock]
   );
 
   // Card stack offset for background cards
@@ -216,6 +433,9 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
   // Exit animation
   const exitX = exitDirection === 'right' ? 500 : exitDirection === 'left' ? -500 : 0;
   const exitRotate = exitDirection === 'right' ? 30 : exitDirection === 'left' ? -30 : 0;
+
+  // Show mystery if not revealed
+  const showMystery = isMystery && !mysteryRevealed;
 
   return (
     <motion.div
@@ -255,20 +475,36 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
           boxShadow: isTop ? boxShadow : '0 10px 40px rgba(0, 0, 0, 0.5)',
         }}
       >
+        {/* Mystery Card Overlay */}
+        {showMystery && (
+          <MysteryCardOverlay onUnlock={() => setMysteryRevealed(true)} />
+        )}
+
         {/* Background Image */}
         <div className="absolute inset-0">
           <img
             src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`}
             alt={profile.display_name}
-            className="w-full h-2/3 object-cover opacity-40"
+            className={`w-full h-2/3 object-cover ${showMystery ? 'opacity-10 blur-xl' : 'opacity-40'}`}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#12121a] via-[#12121a]/90 to-transparent" />
         </div>
 
+        {/* Whale Indicator */}
+        {profile.wallet_rank === 'WHALE' && !showMystery && (
+          <motion.div
+            className="absolute top-4 right-4 z-10"
+            animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <span className="text-4xl drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">🐋</span>
+          </motion.div>
+        )}
+
         {/* LONG Overlay (Right Swipe) */}
         {isTop && (
           <motion.div
-            className="absolute inset-0 bg-primary/10 flex items-center justify-center pointer-events-none"
+            className="absolute inset-0 bg-primary/10 flex items-center justify-center pointer-events-none z-30"
             style={{ opacity: longOpacity }}
           >
             <div className="px-8 py-4 border-4 border-primary rounded-2xl rotate-[-15deg] bg-primary/10">
@@ -282,7 +518,7 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
         {/* SHORT Overlay (Left Swipe) */}
         {isTop && (
           <motion.div
-            className="absolute inset-0 bg-danger/10 flex items-center justify-center pointer-events-none"
+            className="absolute inset-0 bg-danger/10 flex items-center justify-center pointer-events-none z-30"
             style={{ opacity: shortOpacity }}
           >
             <div className="px-8 py-4 border-4 border-danger rounded-2xl rotate-[15deg] bg-danger/10">
@@ -293,119 +529,144 @@ function SwipeCard({ profile, onSwipe, isTop, index }: SwipeCardProps) {
           </motion.div>
         )}
 
-        {/* Content */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 space-y-4">
-          {/* Top Row: Rank & Distance */}
-          <div className="flex items-center justify-between">
-            <div className={`px-3 py-1.5 rounded-full border flex items-center gap-2 ${rankConfig.class}`}>
-              <Wallet className="w-4 h-4" />
-              <span className="text-sm font-medium">{rankConfig.emoji} {rankConfig.label}</span>
-            </div>
-            
-            {profile.distance_km && (
-              <div className="flex items-center gap-1.5 text-white/60 text-sm">
-                <MapPin className="w-4 h-4" />
-                <span>{profile.distance_km.toFixed(1)} km</span>
-              </div>
-            )}
-          </div>
-
-          {/* Name & Username */}
-          <div>
-            <h2 className="text-3xl font-bold text-white">
-              {profile.display_name}
-            </h2>
-            {profile.username && (
-              <p className="text-white/50 text-lg">@{profile.username}</p>
-            )}
-          </div>
-
-          {/* Bio */}
-          {profile.bio && (
-            <p className="text-white/70 text-base leading-relaxed line-clamp-2">
-              {profile.bio}
-            </p>
-          )}
-
-          {/* Price Card */}
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-4 border border-white/10">
+        {/* Content - Hidden when mystery */}
+        {!showMystery && (
+          <div className="relative z-10 h-full flex flex-col p-5 gap-4">
+            {/* Top Row: Rank & Distance */}
             <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-white/50 text-sm">Market Price</p>
-                  {isTop && (
-                    <span className="flex items-center gap-1 text-xs text-white/30">
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                      LIVE
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <motion.span
-                    className={`text-3xl font-bold transition-colors duration-300 ${
-                      priceDirection === 'up' 
-                        ? 'text-primary' 
-                        : priceDirection === 'down' 
-                          ? 'text-danger' 
-                          : 'text-white'
-                    }`}
-                    animate={priceFlash ? { scale: [1, 1.05, 1] } : {}}
-                    transition={{ duration: 0.2 }}
-                  >
-                    ${livePrice.toFixed(2)}
-                  </motion.span>
-                  <div className={`flex items-center gap-1 text-sm font-medium ${priceUp ? 'text-primary' : 'text-danger'}`}>
-                    {priceUp ? (
-                      <TrendingUp className="w-4 h-4" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4" />
-                    )}
-                    <span>
-                      {priceUp ? '+' : ''}{profile.price_change_24h.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
+              <div className={`px-3 py-1.5 rounded-full border flex items-center gap-2 ${rankConfig.class}`}>
+                <Wallet className="w-4 h-4" />
+                <span className="text-sm font-medium">{rankConfig.emoji} {rankConfig.label}</span>
               </div>
               
-              {/* Mini Chart */}
-              <MiniPriceChart priceChange={profile.price_change_24h} />
+              {profile.distance_km && (
+                <div className="flex items-center gap-1.5 text-white/60 text-sm">
+                  <MapPin className="w-4 h-4" />
+                  <span>{profile.distance_km.toFixed(1)} km</span>
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Swipe Hint (only for top card) */}
-          {isTop && (
-            <div className="flex justify-center gap-12 text-sm pt-2">
-              <span className="text-danger/70 font-medium">← SHORT</span>
-              <span className="text-primary/70 font-medium">LONG →</span>
+            {/* Name & Username */}
+            <div>
+              <h2 className="text-3xl font-bold text-white">
+                {profile.display_name}
+              </h2>
+              {profile.username && (
+                <p className="text-white/50 text-lg">@{profile.username}</p>
+              )}
             </div>
-          )}
-        </div>
+
+            {/* Bio */}
+            {profile.bio && (
+              <p className="text-white/70 text-base leading-relaxed line-clamp-2">
+                {profile.bio}
+              </p>
+            )}
+
+            {/* Price Card */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-4 border border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-white/50 text-sm">Market Price</p>
+                    {isTop && (
+                      <span className="flex items-center gap-1 text-xs text-white/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        LIVE
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <motion.span
+                      className={`text-3xl font-bold transition-colors duration-300 ${
+                        priceDirection === 'up' 
+                          ? 'text-primary' 
+                          : priceDirection === 'down' 
+                            ? 'text-danger' 
+                            : 'text-white'
+                      }`}
+                      animate={priceFlash ? { scale: [1, 1.05, 1] } : {}}
+                      transition={{ duration: 0.2 }}
+                    >
+                      ${livePrice.toFixed(2)}
+                    </motion.span>
+                    <div className={`flex items-center gap-1 text-sm font-medium ${priceUp ? 'text-primary' : 'text-danger'}`}>
+                      {priceUp ? (
+                        <TrendingUp className="w-4 h-4" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4" />
+                      )}
+                      <span>
+                        {priceUp ? '+' : ''}{profile.price_change_24h.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Mini Chart */}
+                <MiniPriceChart priceChange={profile.price_change_24h} />
+              </div>
+            </div>
+
+            {/* Swipe Hint (only for top card) */}
+            {isTop && (
+              <div className="flex justify-center gap-12 text-sm pt-2">
+                <span className="text-danger/70 font-medium">← SHORT</span>
+                <span className="text-primary/70 font-medium">LONG →</span>
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
 }
 
 // ============================================
-// Card Stack Component
+// Card Stack Component - Main Export
 // ============================================
 
-export default function CardStack({ profiles, onSwipe, onEmpty }: CardStackProps) {
+export default function CardStack({ profiles, onSwipe, onEmpty, onNeedMore }: CardStackProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [swipeCount, setSwipeCount] = useState(0);
+  const [showFireworks, setShowFireworks] = useState(false);
+  const prefetchTriggeredRef = useRef(false);
+
+  // Reset prefetch flag when new profiles are added
+  useEffect(() => {
+    if (profiles.length > 0) {
+      prefetchTriggeredRef.current = false;
+    }
+  }, [profiles.length]);
+
+  // Infinite Loading - Prefetch when approaching end
+  useEffect(() => {
+    const remainingCards = profiles.length - currentIndex;
+    
+    if (remainingCards <= PREFETCH_THRESHOLD && !prefetchTriggeredRef.current && onNeedMore) {
+      prefetchTriggeredRef.current = true;
+      console.log('🔄 Prefetching more cards... remaining:', remainingCards);
+      onNeedMore();
+    }
+  }, [currentIndex, profiles.length, onNeedMore]);
 
   // Handle swipe action
   const handleSwipe = useCallback(
-    (direction: 'left' | 'right') => {
+    (direction: 'left' | 'right', swipeInfo: SwipeInfo) => {
       const currentProfile = profiles[currentIndex];
       
       if (currentProfile) {
-        onSwipe(direction, currentProfile);
+        onSwipe(direction, currentProfile, swipeInfo);
       }
+
+      // Increment swipe count
+      setSwipeCount(prev => prev + 1);
 
       // Move to next card
       setCurrentIndex((prev) => {
         const nextIndex = prev + 1;
         
-        // Check if we've run out of cards
         if (nextIndex >= profiles.length && onEmpty) {
           setTimeout(onEmpty, 300);
         }
@@ -416,17 +677,53 @@ export default function CardStack({ profiles, onSwipe, onEmpty }: CardStackProps
     [currentIndex, profiles, onSwipe, onEmpty]
   );
 
-  // Get visible cards (show max 3 stacked)
-  const visibleCards = profiles.slice(currentIndex, currentIndex + 3);
+  // Handle Whale match
+  const handleWhaleMatch = useCallback(() => {
+    setShowFireworks(true);
+  }, []);
+
+  // Handle mystery unlock
+  const handleMysteryUnlock = useCallback(() => {
+    console.log('🎁 Mystery card unlocked!');
+    haptic.notification('success');
+  }, []);
+
+  // Get visible cards with mystery card logic
+  const getVisibleCards = () => {
+    const cards: Array<{ profile: FeedUser; isMystery: boolean }> = [];
+    
+    for (let i = 0; i < 3 && currentIndex + i < profiles.length; i++) {
+      const profile = profiles[currentIndex + i];
+      
+      // Mystery appears every MYSTERY_CARD_INTERVAL cards
+      const totalSwipes = swipeCount + i;
+      const isMystery = totalSwipes > 0 && (totalSwipes + 1) % MYSTERY_CARD_INTERVAL === 0;
+      
+      cards.push({ profile, isMystery });
+    }
+    
+    return cards;
+  };
+
+  const visibleCards = getVisibleCards();
 
   // Empty state
   if (visibleCards.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center p-8">
-          <div className="text-6xl mb-4">🏝️</div>
+          <motion.div 
+            className="text-6xl mb-4"
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            🏝️
+          </motion.div>
           <h3 className="text-xl font-bold text-white mb-2">No more profiles</h3>
           <p className="text-white/60">Check back later for more traders!</p>
+          <p className="text-white/40 text-sm mt-2">
+            Bạn đã swipe {swipeCount} profiles!
+          </p>
         </div>
       </div>
     );
@@ -434,15 +731,45 @@ export default function CardStack({ profiles, onSwipe, onEmpty }: CardStackProps
 
   return (
     <div className="relative h-full w-full">
+      {/* Fireworks Effect for Whale Match */}
+      <AnimatePresence>
+        {showFireworks && (
+          <FireworksEffect show={showFireworks} onComplete={() => setShowFireworks(false)} />
+        )}
+      </AnimatePresence>
+      
+      {/* Swipe Counter */}
+      <div className="absolute top-4 right-4 z-50 bg-dark/80 backdrop-blur-sm rounded-full px-3 py-1">
+        <span className="text-xs text-white/60">
+          🔥 {swipeCount} swipes
+        </span>
+      </div>
+      
+      {/* Mystery Card Hint */}
+      {(swipeCount + 1) % MYSTERY_CARD_INTERVAL === 0 && swipeCount > 0 && (
+        <motion.div
+          className="absolute top-4 left-4 z-50 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full px-3 py-1"
+          animate={{ scale: [1, 1.1, 1] }}
+          transition={{ duration: 1, repeat: Infinity }}
+        >
+          <span className="text-xs text-white font-bold">
+            🎁 Mystery coming!
+          </span>
+        </motion.div>
+      )}
+
       <AnimatePresence>
         {/* Render cards in reverse order so top card is last (on top) */}
-        {visibleCards.map((profile, index) => (
+        {visibleCards.map(({ profile, isMystery }, index) => (
           <SwipeCard
             key={profile.id}
             profile={profile}
             onSwipe={handleSwipe}
             isTop={index === 0}
             index={index}
+            isMystery={isMystery}
+            onMysteryUnlock={handleMysteryUnlock}
+            onWhaleMatch={handleWhaleMatch}
           />
         )).reverse()}
       </AnimatePresence>

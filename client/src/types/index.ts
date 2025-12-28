@@ -37,6 +37,14 @@ export interface SwipeResult {
   };
   reward: {
     love_earned: number;
+    base_reward?: number;
+    bonus_multiplier?: number;
+    bonus_reason?: 'MYSTERY_UNLOCK' | 'VIP_WHALE' | 'VIP_SHARK' | 'WHALE_LIKE' | null;
+    bonus_message?: string;
+  };
+  target_info?: {
+    is_vip: boolean;
+    wallet_rank: string;
   };
   relationship?: {
     id: string;

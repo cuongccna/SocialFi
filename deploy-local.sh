@@ -157,7 +157,52 @@ run_migrations() {
         fi
     done
     
+    # Also run server migrations if they exist
+    if [ -d "$APP_DIR/server/src/migrations" ]; then
+        log_info "Running server migrations..."
+        cd "$APP_DIR/server/src/migrations"
+        
+        for file in *.sql; do
+            if [ -f "$file" ]; then
+                APPLIED=$(psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -tAc "SELECT 1 FROM _migrations WHERE filename='server_$file'" 2>/dev/null || echo "0")
+                
+                if [ "$APPLIED" != "1" ]; then
+                    log_info "Applying server migration: $file"
+                    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -f "$file" 2>&1 | grep -v "already exists" || true
+                    psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -c "INSERT INTO _migrations (filename) VALUES ('server_$file') ON CONFLICT DO NOTHING;" 2>/dev/null || true
+                    log_success "Server migration $file applied"
+                else
+                    log_info "Skipping already applied server migration: $file"
+                fi
+            fi
+        done
+    fi
+    
     log_success "Migrations complete!"
+}
+
+# =====================================================
+# 3.5. Seed VIP Profiles
+# =====================================================
+seed_vip_profiles() {
+    log_info "Seeding VIP profiles..."
+    
+    cd "$APP_DIR/server"
+    
+    # Check if VIP seed already done
+    export PGPASSWORD="Cuongnv@123"
+    VIP_COUNT=$(psql -h localhost -U CryptoCrush_user -d CryptoCrush_db -tAc "SELECT COUNT(*) FROM users WHERE is_vip = TRUE" 2>/dev/null || echo "0")
+    
+    if [ "$VIP_COUNT" -gt "0" ]; then
+        log_info "VIP profiles already exist ($VIP_COUNT profiles), updating..."
+    fi
+    
+    # Run VIP seeder
+    npm run seed:vip 2>&1 || {
+        log_warning "VIP seeding had issues, but continuing..."
+    }
+    
+    log_success "VIP profiles ready!"
 }
 
 # =====================================================
@@ -623,13 +668,14 @@ show_menu() {
     echo "2) Install dependencies only"
     echo "3) Setup database only"
     echo "4) Run migrations only"
-    echo "5) Configure environment only"
-    echo "6) Build application only"
-    echo "7) Configure Nginx only"
-    echo "8) Setup SSL only"
-    echo "9) Configure PM2 only"
-    echo "10) Quick update (git pull + rebuild + restart)"
-    echo "11) Check status"
+    echo "5) Seed VIP profiles"
+    echo "6) Configure environment only"
+    echo "7) Build application only"
+    echo "8) Configure Nginx only"
+    echo "9) Setup SSL only"
+    echo "10) Configure PM2 only"
+    echo "11) Quick update (git pull + rebuild + restart)"
+    echo "12) Check status"
     echo "0) Exit"
     echo ""
 }
@@ -640,6 +686,7 @@ full_deployment() {
     install_dependencies
     setup_database
     run_migrations
+    seed_vip_profiles
     configure_env
     build_app
     configure_nginx
@@ -694,13 +741,14 @@ case $choice in
     2) install_dependencies ;;
     3) setup_database ;;
     4) run_migrations ;;
-    5) configure_env ;;
-    6) build_app ;;
-    7) configure_nginx ;;
-    8) setup_ssl ;;
-    9) configure_pm2 ;;
-    10) quick_update ;;
-    11) check_status ;;
+    5) seed_vip_profiles ;;
+    6) configure_env ;;
+    7) build_app ;;
+    8) configure_nginx ;;
+    9) setup_ssl ;;
+    10) configure_pm2 ;;
+    11) quick_update ;;
+    12) check_status ;;
     0) exit 0 ;;
     *) log_error "Invalid option" ;;
 esac

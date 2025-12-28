@@ -54,17 +54,21 @@ export default function FeedPage() {
   };
 
   // Handle swipe action
-  const handleSwipe = useCallback(async (direction: 'left' | 'right', profile: FeedUser) => {
+  const handleSwipe = useCallback(async (
+    direction: 'left' | 'right', 
+    profile: FeedUser,
+    swipeInfo?: { isMystery: boolean; isVip: boolean; isWhale: boolean }
+  ) => {
     const action = direction === 'right' ? 'LONG' : 'SHORT';
-    console.log(`📊 ${action} on:`, profile.display_name, `($${profile.market_price})`);
+    console.log(`📊 ${action} on:`, profile.display_name, `($${profile.market_price})`, swipeInfo);
     
     setSwipeCount(prev => prev + 1);
     
     try {
-      // Call API to record swipe
+      // Call API to record swipe with mystery/vip flags
       const result = direction === 'right' 
-        ? await swipeRight(profile.id)
-        : await swipeLeft(profile.id);
+        ? await swipeRight(profile.id, { isMystery: swipeInfo?.isMystery })
+        : await swipeLeft(profile.id, { isMystery: swipeInfo?.isMystery });
 
       console.log('Swipe result:', result);
 
@@ -77,7 +81,17 @@ export default function FeedPage() {
 
       // Update user balance from reward
       if (result.reward?.love_earned) {
-        console.log(`💰 Earned ${result.reward.love_earned} $LOVE`);
+        const multiplier = result.reward.bonus_multiplier ?? 1;
+        const bonus = multiplier > 1 
+          ? ` (x${multiplier} BONUS!)` 
+          : '';
+        console.log(`💰 Earned ${result.reward.love_earned} $LOVE${bonus}`);
+        
+        // Show bonus toast if applicable
+        if (result.reward.bonus_message) {
+          console.log(`🎉 ${result.reward.bonus_message}`);
+          // TODO: Show toast notification
+        }
       }
     } catch (err) {
       console.error('Failed to record swipe:', err);
@@ -114,6 +128,33 @@ export default function FeedPage() {
       setError('Failed to refresh. Please try again.');
     } finally {
       setIsLoading(false);
+    }
+  }, [user]);
+
+  // Prefetch more cards (Infinite Loading)
+  const handleNeedMore = useCallback(async () => {
+    console.log('🔄 Prefetching more cards...');
+    
+    try {
+      const feedUsers = await getFeed(
+        user?.latitude || undefined,
+        user?.longitude || undefined,
+        10, // radius in km
+        20  // limit
+      );
+
+      if (feedUsers.length > 0) {
+        // Append new users to existing list
+        setUsers(prev => {
+          // Filter out duplicates
+          const existingIds = new Set(prev.map(u => u.id));
+          const newUsers = feedUsers.filter(u => !existingIds.has(u.id));
+          return [...prev, ...newUsers];
+        });
+      }
+    } catch (err) {
+      console.error('Failed to prefetch:', err);
+      // Don't show error - just log it
     }
   }, [user]);
 
@@ -209,6 +250,7 @@ export default function FeedPage() {
           profiles={users}
           onSwipe={handleSwipe}
           onEmpty={handleEmpty}
+          onNeedMore={handleNeedMore}
         />
       </div>
 
