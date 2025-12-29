@@ -234,30 +234,51 @@ configure_env() {
         fi
     fi
     
-    # Create production .env
+    # Create production .env with all required variables
     cat > "$ENV_FILE" << 'EOF'
+# ========================================
+# CryptoCrush Production Environment
+# ========================================
+
 # Server Configuration
 PORT=3005
 NODE_ENV=production
 
+# Development Auth Bypass (MUST be false in production!)
+DEV_BYPASS_AUTH=false
+
+# ========================================
 # PostgreSQL Database
+# ========================================
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=CryptoCrush_db
 DB_USER=CryptoCrush_user
 DB_PASSWORD=Cuongnv@123
 
-# Telegram Bot
-BOT_TOKEN=8450445506:AAHTteZ8NBswolK9N91y7d-cet9q5flIloE
+# Also keep PG vars for compatibility
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=CryptoCrush_db
+PGUSER=CryptoCrush_user
+PGPASSWORD=Cuongnv@123
 
-# CORS
+# ========================================
+# Telegram Bot
+# ========================================
+BOT_TOKEN=8450445506:AAHTteZ8NBswolK9N91y7d-cet9q5flIloE
+TELEGRAM_BOT_TOKEN=8450445506:AAHTteZ8NBswolK9N91y7d-cet9q5flIloE
+
+# ========================================
+# CORS & URLs
+# ========================================
 CORS_ORIGIN=https://magiamhot.io.vn
 
-# TON Connect
+# TON Connect Manifest
 TONCONNECT_MANIFEST_URL=https://magiamhot.io.vn/tonconnect-manifest.json
 EOF
 
-    log_success "Environment configured!"
+    log_success "Environment configured with all required variables!"
 }
 
 # =====================================================
@@ -270,6 +291,31 @@ build_app() {
     cd "$APP_DIR/server"
     log_info "Installing backend dependencies..."
     npm install --production
+    
+    # ========================================
+    # Verify critical npm packages are installed
+    # ========================================
+    log_info "Verifying critical packages..."
+    
+    CRITICAL_PACKAGES=(
+        "@faker-js/faker"    # Market maker bot users (ESM module)
+        "cors"               # CORS handling
+        "dotenv"             # Environment variables
+        "express"            # Web framework
+        "grammy"             # Telegram bot
+        "helmet"             # Security headers
+        "node-cron"          # Scheduled tasks (market maker)
+        "pg"                 # PostgreSQL client
+    )
+    
+    for pkg in "${CRITICAL_PACKAGES[@]}"; do
+        if ! npm list "$pkg" --depth=0 2>/dev/null | grep -q "$pkg"; then
+            log_warning "Package $pkg not found, installing..."
+            npm install "$pkg" --save
+        else
+            log_info "Package $pkg is installed"
+        fi
+    done
     
     # Install frontend dependencies and build
     cd "$APP_DIR/client"
@@ -285,7 +331,7 @@ build_app() {
     # Sync build (preserves existing files, updates changed ones)
     rsync -av --delete dist/ /var/www/html/cryptocrush/ 2>/dev/null || cp -r dist/* /var/www/html/cryptocrush/
     
-    log_success "Application built!"
+    log_success "Application built with all dependencies!"
 }
 
 # =====================================================
@@ -656,6 +702,50 @@ check_status() {
 # =====================================================
 # Menu
 # =====================================================
+# =====================================================
+# 13. Show Migrations & Packages Info
+# =====================================================
+show_migrations_info() {
+    echo ""
+    log_info "=== Database Migrations ==="
+    echo ""
+    echo -e "${YELLOW}database/migrations/ (11 files):${NC}"
+    echo "  001_initial_schema.sql          - Core tables (users, swipes)"
+    echo "  001_initial_schema_no_postgis.sql - No PostGIS version"
+    echo "  002_add_messages.sql            - Chat/messaging system"
+    echo "  003_add_disputes.sql            - Dispute resolution"
+    echo "  004_add_blurred_images.sql      - Blurred image system"
+    echo "  005_add_tasks_referrals.sql     - Tasks & referrals"
+    echo "  006_add_bot_users.sql           - Bot user generation"
+    echo "  007_add_price_history.sql       - Price history tracking"
+    echo "  008_add_yield_farming.sql       - Yield farming system"
+    echo "  009_add_boost_system.sql        - Profile boost"
+    echo "  010_add_fud_system.sql          - FUD mechanism"
+    echo ""
+    echo -e "${YELLOW}server/migrations/ (1 file):${NC}"
+    echo "  011_add_is_vip_column.sql       - VIP user support"
+    echo ""
+    log_info "=== Critical NPM Packages (Server) ==="
+    echo ""
+    echo "  @faker-js/faker  - Market maker bot users (ESM module)"
+    echo "  cors             - CORS handling"
+    echo "  dotenv           - Environment variables"
+    echo "  express          - Web framework"
+    echo "  grammy           - Telegram bot library"
+    echo "  helmet           - Security headers"
+    echo "  node-cron        - Scheduled tasks (market maker)"
+    echo "  pg               - PostgreSQL client"
+    echo ""
+    log_info "=== Required Environment Variables ==="
+    echo ""
+    echo "  PORT, NODE_ENV, DEV_BYPASS_AUTH"
+    echo "  DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD"
+    echo "  PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD"
+    echo "  BOT_TOKEN, TELEGRAM_BOT_TOKEN"
+    echo "  CORS_ORIGIN, TONCONNECT_MANIFEST_URL"
+    echo ""
+}
+
 show_menu() {
     echo ""
     echo -e "${GREEN}=========================================${NC}"
@@ -676,6 +766,7 @@ show_menu() {
     echo "10) Configure PM2 only"
     echo "11) Quick update (git pull + rebuild + restart)"
     echo "12) Check status"
+    echo "13) Show migrations & packages info"
     echo "0) Exit"
     echo ""
 }
@@ -749,6 +840,7 @@ case $choice in
     10) configure_pm2 ;;
     11) quick_update ;;
     12) check_status ;;
+    13) show_migrations_info ;;
     0) exit 0 ;;
     *) log_error "Invalid option" ;;
 esac
