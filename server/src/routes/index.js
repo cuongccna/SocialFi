@@ -30,5 +30,6 @@ router.use('/users', require('./users.routes'));
 router.use('/tasks', require('./tasks.routes'));
 router.use('/referrals', require('./referrals.routes'));
 router.use('/wallet', require('./wallet.routes'));
+router.use('/fud', require('./fud.routes'));
 
 module.exports = router;

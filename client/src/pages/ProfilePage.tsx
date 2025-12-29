@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users } from 'lucide-react';
+import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users, Camera, BadgeCheck, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { getUserStats, formatNumber, type UserStats } from '../services/profile.service';
 import { getMatches } from '../services/matches.service';
 import { haptic } from '../utils/telegram';
+import { getAvatarUrl, isDefaultAvatar, avatarRingClass } from '../utils/helpers';
 
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [matchCount, setMatchCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [showUploadTooltip, setShowUploadTooltip] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -85,14 +88,41 @@ export default function ProfilePage() {
           <div className="flex items-center gap-4 mb-6">
             <div className="relative">
               <img
-                src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`}
+                src={getAvatarUrl(user)}
                 alt={user.display_name}
-                className="w-20 h-20 rounded-full border-4 border-primary/50 object-cover"
+                className={`w-20 h-20 rounded-full border-4 border-primary/50 object-cover ${avatarRingClass}`}
               />
               <span className="absolute -bottom-1 -right-1 text-2xl">{rankInfo.emoji}</span>
+              
+              {/* Upload Photo Button - Show if using default avatar */}
+              {isDefaultAvatar(user) && (
+                <motion.button
+                  onClick={() => {
+                    haptic.impact('light');
+                    setShowUploadTooltip(!showUploadTooltip);
+                    // TODO: Implement actual upload flow
+                  }}
+                  whileTap={{ scale: 0.9 }}
+                  className="absolute -top-1 -left-1 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30"
+                >
+                  <Camera className="w-4 h-4 text-dark" />
+                </motion.button>
+              )}
+              
+              {/* Verified badge if has real photo */}
+              {!isDefaultAvatar(user) && (
+                <div className="absolute -top-1 -left-1 w-6 h-6 rounded-full bg-neon-blue flex items-center justify-center">
+                  <BadgeCheck className="w-4 h-4 text-white" />
+                </div>
+              )}
             </div>
             <div className="flex-1">
-              <h2 className="text-xl font-bold">{user.display_name}</h2>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                {user.display_name}
+                {!isDefaultAvatar(user) && (
+                  <BadgeCheck className="w-5 h-5 text-neon-blue" />
+                )}
+              </h2>
               {user.username && (
                 <p className="text-white/60">@{user.username}</p>
               )}
@@ -101,6 +131,48 @@ export default function ProfilePage() {
               </span>
             </div>
           </div>
+          
+          {/* Upload Photo Tooltip */}
+          <AnimatePresence>
+            {showUploadTooltip && isDefaultAvatar(user) && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -10, height: 0 }}
+                className="mb-4 p-4 bg-gradient-to-r from-primary/20 via-neon-blue/20 to-neon-purple/20 rounded-xl border border-primary/30"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-full bg-primary/20 shrink-0">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-primary mb-1">Get Verified!</h4>
+                    <p className="text-sm text-white/70 mb-3">
+                      Upload a real photo to get the <span className="text-neon-blue">✓ Verified Badge</span> and 
+                      <span className="text-neon-yellow font-bold"> boost your Market Cap by 10%!</span>
+                    </p>
+                    <button 
+                      className="btn-primary text-sm py-2 px-4 flex items-center gap-2"
+                      onClick={() => {
+                        haptic.impact('medium');
+                        // TODO: Implement upload
+                        alert('Photo upload coming soon!');
+                      }}
+                    >
+                      <Camera className="w-4 h-4" />
+                      Upload Photo
+                    </button>
+                  </div>
+                  <button 
+                    onClick={() => setShowUploadTooltip(false)}
+                    className="text-white/40 hover:text-white/60 text-xl leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Bio */}
           {user.bio && (

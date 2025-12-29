@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Trophy, TrendingUp, TrendingDown, Heart, Loader2, RefreshCw, Users, Flame } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, Heart, Loader2, RefreshCw, Users, Flame, Crown, Star } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { 
   getLeaderboard, 
   getCouplesLeaderboard,
@@ -10,6 +11,43 @@ import {
 } from '../services/leaderboard.service';
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../utils/telegram';
+import { getAvatarUrl, avatarRingClass } from '../utils/helpers';
+
+/**
+ * Get rank badge styling based on rank position
+ */
+function getRankBadgeStyle(rank: number): { 
+  wrapper: string; 
+  badge: string; 
+  showCrown: boolean;
+  glow: string;
+} {
+  if (rank <= 3) {
+    // Top 3: Gold treatment with crown
+    return {
+      wrapper: 'relative',
+      badge: 'bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600 text-dark font-black border-2 border-yellow-300',
+      showCrown: true,
+      glow: 'shadow-[0_0_20px_rgba(251,191,36,0.6)]',
+    };
+  } else if (rank <= 100) {
+    // Top 100: Silver treatment
+    return {
+      wrapper: 'relative',
+      badge: 'bg-gradient-to-br from-gray-300 via-gray-400 to-gray-500 text-dark font-bold border-2 border-gray-200',
+      showCrown: false,
+      glow: 'shadow-md',
+    };
+  } else {
+    // Everyone else: Neon green
+    return {
+      wrapper: 'relative',
+      badge: 'bg-neon-green/10 text-neon-green font-semibold border border-neon-green/50',
+      showCrown: false,
+      glow: '',
+    };
+  }
+}
 
 type TabType = 'users' | 'couples';
 
@@ -133,20 +171,50 @@ export default function LeaderboardPage() {
         )}
       </div>
 
-      {/* Your Rank Banner */}
+      {/* My Rank Banner - Prominent Section */}
       {activeTab === 'users' && userRank && (
-        <div className="mx-4 mb-4 p-4 bg-gradient-to-r from-primary/20 to-neon-purple/20 rounded-xl border border-primary/30">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-white/60">Your Rank</p>
-              <p className="text-2xl font-bold text-primary">#{userRank}</p>
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-4 mb-4 p-5 bg-gradient-to-r from-primary/30 via-neon-purple/30 to-primary/30 rounded-2xl border-2 border-primary/50 shadow-[0_0_30px_rgba(0,255,136,0.2)] relative overflow-hidden"
+        >
+          {/* Animated background shimmer */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer" />
+          
+          <div className="flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-4">
+              {/* Avatar */}
+              <div className="relative">
+                <img
+                  src={user ? getAvatarUrl(user) : ''}
+                  alt="You"
+                  className={`w-16 h-16 rounded-full border-3 border-primary object-cover shadow-[0_0_15px_rgba(0,255,136,0.4)] ${avatarRingClass}`}
+                />
+                <Star className="absolute -top-1 -right-1 w-5 h-5 text-neon-yellow fill-neon-yellow" />
+              </div>
+              <div>
+                <p className="text-sm text-white/60 mb-1">Your Rank</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary via-neon-yellow to-neon-purple">
+                    #{userRank}
+                  </span>
+                  {userRank <= 10 && <Crown className="w-6 h-6 text-neon-yellow animate-pulse" />}
+                </div>
+              </div>
             </div>
             <div className="text-right">
-              <p className="text-sm text-white/60">Market Price</p>
-              <p className="text-xl font-bold">${user?.market_price?.toFixed(2) || '10.00'}</p>
+              <p className="text-sm text-white/60 mb-1">Market Price</p>
+              <p className="text-3xl font-bold text-primary">
+                ${user?.market_price?.toFixed(2) || '10.00'}
+              </p>
+              {user?.price_change_24h !== undefined && (
+                <p className={`text-sm ${user.price_change_24h >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>
+                  {user.price_change_24h >= 0 ? '+' : ''}{user.price_change_24h.toFixed(2)}%
+                </p>
+              )}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Loading */}
@@ -169,32 +237,51 @@ export default function LeaderboardPage() {
       {/* Users List */}
       {!isLoading && !error && activeTab === 'users' && (
         <div className="px-4 space-y-2">
-          {users.map((leaderUser) => {
+          {users.map((leaderUser, index) => {
             const rankDisplay = getRankDisplay(leaderUser.rank);
+            const rankStyle = getRankBadgeStyle(leaderUser.rank);
             const isCurrentUser = leaderUser.id === user?.id;
             
             return (
-              <div
+              <motion.div
                 key={leaderUser.id}
-                className={`card p-3 flex items-center gap-3 ${
-                  isCurrentUser ? 'border-primary/50 bg-primary/10' : ''
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.03 }}
+                className={`card p-3 flex items-center gap-3 transition-all ${
+                  isCurrentUser 
+                    ? 'border-2 border-primary bg-primary/15 shadow-[0_0_15px_rgba(0,255,136,0.3)]' 
+                    : leaderUser.rank <= 3
+                    ? 'border border-yellow-400/30 bg-yellow-400/5'
+                    : ''
                 }`}
               >
-                {/* Rank */}
-                <div className={`w-10 text-center font-bold ${rankDisplay.class}`}>
-                  {leaderUser.rank <= 3 ? (
-                    <span className="text-2xl">{rankDisplay.emoji}</span>
-                  ) : (
-                    <span className="text-lg">{rankDisplay.emoji}</span>
+                {/* Rank Badge */}
+                <div className={rankStyle.wrapper}>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${rankStyle.badge} ${rankStyle.glow}`}>
+                    {leaderUser.rank <= 3 ? (
+                      <span className="text-xl">{rankDisplay.emoji}</span>
+                    ) : (
+                      <span className="text-sm">#{leaderUser.rank}</span>
+                    )}
+                  </div>
+                  {rankStyle.showCrown && (
+                    <Crown className="absolute -top-2 -right-2 w-5 h-5 text-yellow-400 drop-shadow-lg" />
                   )}
                 </div>
 
                 {/* Avatar */}
                 <div className="relative">
                   <img
-                    src={leaderUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${leaderUser.id}`}
+                    src={getAvatarUrl(leaderUser)}
                     alt={leaderUser.display_name}
-                    className="w-12 h-12 rounded-full border-2 border-white/20 object-cover"
+                    className={`w-12 h-12 rounded-full border-2 object-cover ${avatarRingClass} ${
+                      leaderUser.rank <= 3 
+                        ? 'border-yellow-400' 
+                        : leaderUser.rank <= 100 
+                        ? 'border-gray-400' 
+                        : 'border-white/20'
+                    }`}
                   />
                   <span className="absolute -bottom-1 -right-1 text-sm">
                     {getRankEmoji(leaderUser.wallet_rank)}
@@ -204,9 +291,9 @@ export default function LeaderboardPage() {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold truncate">
+                    <h3 className={`font-semibold truncate ${leaderUser.rank <= 3 ? 'text-yellow-300' : ''}`}>
                       {leaderUser.display_name}
-                      {isCurrentUser && <span className="text-primary ml-1">(You)</span>}
+                      {isCurrentUser && <span className="text-primary ml-1 font-bold">(You)</span>}
                     </h3>
                   </div>
                   {leaderUser.username && (
@@ -216,15 +303,20 @@ export default function LeaderboardPage() {
 
                 {/* Price */}
                 <div className="text-right">
-                  <p className="font-bold text-primary">
+                  <p className={`font-bold ${leaderUser.rank <= 3 ? 'text-yellow-300 text-lg' : 'text-primary'}`}>
                     ${leaderUser.market_price?.toFixed(2) || '0.00'}
                   </p>
-                  <p className={`text-xs ${getPriceChangeColor(leaderUser.price_change_24h || 0)}`}>
+                  <p className={`text-xs flex items-center justify-end gap-1 ${getPriceChangeColor(leaderUser.price_change_24h || 0)}`}>
+                    {(leaderUser.price_change_24h || 0) >= 0 ? (
+                      <TrendingUp className="w-3 h-3" />
+                    ) : (
+                      <TrendingDown className="w-3 h-3" />
+                    )}
                     {(leaderUser.price_change_24h || 0) >= 0 ? '+' : ''}
                     {(leaderUser.price_change_24h || 0).toFixed(2)}%
                   </p>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
 
@@ -239,19 +331,33 @@ export default function LeaderboardPage() {
       {/* Couples List */}
       {!isLoading && !error && activeTab === 'couples' && (
         <div className="px-4 space-y-3">
-          {couples.map((couple) => {
+          {couples.map((couple, index) => {
             const rankDisplay = getRankDisplay(couple.rank);
+            const rankStyle = getRankBadgeStyle(couple.rank);
             
             return (
-              <div key={couple.relationship_id} className="card p-4">
+              <motion.div 
+                key={couple.relationship_id} 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className={`card p-4 ${
+                  couple.rank <= 3 
+                    ? 'border border-yellow-400/30 bg-gradient-to-br from-yellow-400/5 to-transparent' 
+                    : ''
+                }`}
+              >
                 {/* Rank & Status */}
                 <div className="flex items-center justify-between mb-3">
-                  <div className={`font-bold ${rankDisplay.class}`}>
-                    {couple.rank <= 3 ? (
-                      <span className="text-xl">{rankDisplay.emoji}</span>
-                    ) : (
-                      <span>{rankDisplay.emoji}</span>
-                    )}
+                  <div className={rankStyle.wrapper}>
+                    <div className={`px-3 py-1.5 rounded-lg flex items-center gap-2 ${rankStyle.badge} ${rankStyle.glow}`}>
+                      {couple.rank <= 3 ? (
+                        <span className="text-lg">{rankDisplay.emoji}</span>
+                      ) : (
+                        <span className="text-sm font-semibold">#{couple.rank}</span>
+                      )}
+                      {rankStyle.showCrown && <Crown className="w-4 h-4 text-yellow-600" />}
+                    </div>
                   </div>
                   {couple.status === 'MINTED_CONTRACT' && (
                     <span className="text-xs px-2 py-0.5 bg-neon-purple/20 text-neon-purple rounded-full flex items-center gap-1">
@@ -265,9 +371,9 @@ export default function LeaderboardPage() {
                 <div className="flex items-center justify-center gap-4 mb-3">
                   <div className="text-center">
                     <img
-                      src={couple.user_a_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${couple.user_a_id}`}
+                      src={couple.user_a_avatar || `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${couple.user_a_id}&backgroundColor=transparent`}
                       alt={couple.user_a_name}
-                      className="w-14 h-14 rounded-full border-2 border-primary/50 object-cover mx-auto"
+                      className={`w-14 h-14 rounded-full border-2 border-primary/50 object-cover mx-auto ${avatarRingClass}`}
                     />
                     <p className="text-sm font-medium mt-1 truncate max-w-[80px]">{couple.user_a_name}</p>
                     <p className="text-xs text-primary">${couple.user_a_price?.toFixed(2)}</p>
@@ -279,9 +385,9 @@ export default function LeaderboardPage() {
 
                   <div className="text-center">
                     <img
-                      src={couple.user_b_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${couple.user_b_id}`}
+                      src={couple.user_b_avatar || `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${couple.user_b_id}&backgroundColor=transparent`}
                       alt={couple.user_b_name}
-                      className="w-14 h-14 rounded-full border-2 border-neon-purple/50 object-cover mx-auto"
+                      className={`w-14 h-14 rounded-full border-2 border-neon-purple/50 object-cover mx-auto ${avatarRingClass}`}
                     />
                     <p className="text-sm font-medium mt-1 truncate max-w-[80px]">{couple.user_b_name}</p>
                     <p className="text-xs text-neon-purple">${couple.user_b_price?.toFixed(2)}</p>
@@ -289,13 +395,19 @@ export default function LeaderboardPage() {
                 </div>
 
                 {/* Combined Market Cap */}
-                <div className="text-center p-2 bg-white/5 rounded-lg">
+                <div className={`text-center p-3 rounded-lg ${
+                  couple.rank <= 3 
+                    ? 'bg-gradient-to-r from-yellow-400/10 via-amber-500/10 to-yellow-400/10' 
+                    : 'bg-white/5'
+                }`}>
                   <p className="text-xs text-white/60">Combined Market Cap</p>
-                  <p className="text-xl font-bold text-neon-yellow">
+                  <p className={`text-2xl font-bold ${
+                    couple.rank <= 3 ? 'text-yellow-400' : 'text-neon-yellow'
+                  }`}>
                     ${couple.combined_market_cap?.toFixed(2)}
                   </p>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
 

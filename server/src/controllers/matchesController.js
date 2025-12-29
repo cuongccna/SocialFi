@@ -3,8 +3,11 @@
  * Handles relationships and matches
  */
 
-const { pool, query } = require('../config/db');
+const { pool, query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
+
+// Yield Farming Constants
+const LOVE_PER_HOUR = 10; // $LOVE earned per hour per couple
 
 /**
  * GET /matches
@@ -223,9 +226,180 @@ async function burnContract(req, res, next) {
   }
 }
 
+/**
+ * POST /matches/:id/harvest
+ * Harvest accrued $LOVE from yield farming
+ * Both partners can trigger harvest, both receive rewards
+ */
+async function harvestLove(req, res, next) {
+  const client = await getClient();
+  
+  try {
+    const userId = req.user.id;
+    const relationshipId = req.params.id;
+    
+    await client.query('BEGIN');
+    
+    // Get relationship and verify user is part of it
+    const relationshipResult = await client.query(`
+      SELECT 
+        r.id,
+        r.user_a,
+        r.user_b,
+        r.status,
+        r.last_harvest_at,
+        r.accrued_love,
+        u_a.display_name as user_a_name,
+        u_b.display_name as user_b_name
+      FROM relationships r
+      JOIN users u_a ON r.user_a = u_a.id
+      JOIN users u_b ON r.user_b = u_b.id
+      WHERE r.id = $1
+        AND (r.user_a = $2 OR r.user_b = $2)
+        AND r.status IN ('MATCHED', 'MINTED_CONTRACT')
+      FOR UPDATE;
+    `, [relationshipId, userId]);
+    
+    if (relationshipResult.rows.length === 0) {
+      throw new ApiError(404, 'Relationship not found or not eligible for harvest');
+    }
+    
+    const relationship = relationshipResult.rows[0];
+    const lastHarvest = new Date(relationship.last_harvest_at);
+    const now = new Date();
+    
+    // Calculate hours since last harvest
+    const hoursDiff = (now - lastHarvest) / (1000 * 60 * 60);
+    
+    // Minimum 1 hour between harvests
+    if (hoursDiff < 1) {
+      const minutesRemaining = Math.ceil((1 - hoursDiff) * 60);
+      throw new ApiError(400, `Harvest available in ${minutesRemaining} minutes`);
+    }
+    
+    // Calculate reward: time-based + any accrued passive love
+    const timeBasedReward = Math.floor(hoursDiff) * LOVE_PER_HOUR;
+    const accruedReward = parseFloat(relationship.accrued_love) || 0;
+    const totalReward = timeBasedReward + accruedReward;
+    
+    // Each partner gets half of the total reward
+    const rewardPerUser = totalReward / 2;
+    
+    // Update both users' balance
+    await client.query(`
+      UPDATE users 
+      SET 
+        balance_love = balance_love + $1,
+        updated_at = NOW()
+      WHERE id IN ($2, $3);
+    `, [rewardPerUser, relationship.user_a, relationship.user_b]);
+    
+    // Reset harvest timer and accrued love
+    await client.query(`
+      UPDATE relationships
+      SET 
+        last_harvest_at = NOW(),
+        accrued_love = 0,
+        updated_at = NOW()
+      WHERE id = $1;
+    `, [relationshipId]);
+    
+    await client.query('COMMIT');
+    
+    // Get updated balances
+    const balancesResult = await query(`
+      SELECT id, display_name, balance_love 
+      FROM users 
+      WHERE id IN ($1, $2);
+    `, [relationship.user_a, relationship.user_b]);
+    
+    res.json({
+      success: true,
+      message: `🌾 Harvested ${totalReward.toFixed(2)} $LOVE!`,
+      harvest: {
+        relationship_id: relationshipId,
+        hours_farmed: Math.floor(hoursDiff),
+        time_based_reward: timeBasedReward,
+        accrued_reward: accruedReward,
+        total_harvested: totalReward,
+        per_user: rewardPerUser,
+      },
+      users: balancesResult.rows.map(u => ({
+        id: u.id,
+        display_name: u.display_name,
+        new_balance: parseFloat(u.balance_love),
+      })),
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * GET /matches/:id/farming-status
+ * Get current yield farming status for a relationship
+ */
+async function getFarmingStatus(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const relationshipId = req.params.id;
+    
+    const result = await query(`
+      SELECT 
+        r.id,
+        r.status,
+        r.last_harvest_at,
+        r.accrued_love,
+        r.start_date,
+        EXTRACT(EPOCH FROM (NOW() - r.last_harvest_at)) / 3600 as hours_since_harvest
+      FROM relationships r
+      WHERE r.id = $1
+        AND (r.user_a = $2 OR r.user_b = $2)
+        AND r.status IN ('MATCHED', 'MINTED_CONTRACT');
+    `, [relationshipId, userId]);
+    
+    if (result.rows.length === 0) {
+      throw new ApiError(404, 'Relationship not found');
+    }
+    
+    const relationship = result.rows[0];
+    const hoursSinceHarvest = parseFloat(relationship.hours_since_harvest);
+    const pendingReward = Math.floor(hoursSinceHarvest) * LOVE_PER_HOUR;
+    const accruedLove = parseFloat(relationship.accrued_love) || 0;
+    const totalPending = pendingReward + accruedLove;
+    const canHarvest = hoursSinceHarvest >= 1;
+    
+    res.json({
+      success: true,
+      farming: {
+        relationship_id: relationshipId,
+        status: relationship.status,
+        started_at: relationship.start_date,
+        last_harvest_at: relationship.last_harvest_at,
+        hours_since_harvest: hoursSinceHarvest.toFixed(2),
+        rate_per_hour: LOVE_PER_HOUR,
+        pending_reward: pendingReward,
+        accrued_love: accruedLove,
+        total_pending: totalPending,
+        can_harvest: canHarvest,
+        next_harvest_in: canHarvest ? 0 : Math.ceil((1 - hoursSinceHarvest) * 60),
+      },
+    });
+    
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getMatches,
   getMatchById,
   mintContract,
   burnContract,
+  harvestLove,
+  getFarmingStatus,
 };

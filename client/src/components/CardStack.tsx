@@ -6,6 +6,7 @@
  * - Mystery Card every 5 swipes (blurred, unlock with swipe right)
  * - Jackpot Effect when matching with Whale (haptic + fireworks)
  * - Infinite Loading (prefetch when 3 cards left)
+ * - Holographic 3D tilt effect for Whale/Premium profiles
  */
 
 import { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
@@ -18,6 +19,8 @@ import {
 } from 'framer-motion';
 import { TrendingUp, TrendingDown, MapPin, Wallet, HelpCircle, Sparkles, Lock } from 'lucide-react';
 import { haptic } from '../utils/telegram';
+import { getAvatarUrl } from '../utils/helpers';
+import './HoloCard.css';
 import type { FeedUser } from '../types';
 
 // ============================================
@@ -81,13 +84,13 @@ function FireworksEffect({ show, onComplete }: { show: boolean; onComplete: () =
   }));
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
       {/* Jackpot Banner */}
       <motion.div
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: -100, opacity: 0 }}
-        className="absolute top-20 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-500 px-8 py-4 rounded-2xl shadow-2xl"
+        className="absolute top-20 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-500 px-8 py-4 rounded-2xl shadow-2xl z-[9999] pointer-events-auto"
       >
         <div className="flex items-center gap-3">
           <span className="text-4xl">🐋</span>
@@ -286,6 +289,98 @@ function pointsToPath(points: number[]): string {
 }
 
 // ============================================
+// 3D Tilt Hook for Holographic Effect
+// ============================================
+
+interface TiltState {
+  rotateX: number;
+  rotateY: number;
+  glareX: number;
+  glareY: number;
+}
+
+function use3DTilt(enabled: boolean, cardRef: React.RefObject<HTMLDivElement | null>) {
+  const [tilt, setTilt] = useState<TiltState>({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
+  const [isTilting, setIsTilting] = useState(false);
+
+  useEffect(() => {
+    if (!enabled || !cardRef.current) return;
+
+    const card = cardRef.current;
+    const maxTilt = 15; // Maximum tilt angle in degrees
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = card.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const mouseX = e.clientX - centerX;
+      const mouseY = e.clientY - centerY;
+      
+      const rotateY = (mouseX / (rect.width / 2)) * maxTilt;
+      const rotateX = -(mouseY / (rect.height / 2)) * maxTilt;
+      
+      const glareX = ((e.clientX - rect.left) / rect.width) * 100;
+      const glareY = ((e.clientY - rect.top) / rect.height) * 100;
+
+      setTilt({ rotateX, rotateY, glareX, glareY });
+      setIsTilting(true);
+    };
+
+    const handleMouseLeave = () => {
+      setTilt({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50 });
+      setIsTilting(false);
+    };
+
+    // Gyroscope support for mobile
+    const handleDeviceOrientation = (e: DeviceOrientationEvent) => {
+      if (e.gamma === null || e.beta === null) return;
+      
+      const rotateY = Math.max(-maxTilt, Math.min(maxTilt, e.gamma));
+      const rotateX = Math.max(-maxTilt, Math.min(maxTilt, e.beta - 45));
+      
+      const glareX = 50 + (rotateY / maxTilt) * 50;
+      const glareY = 50 + (rotateX / maxTilt) * 50;
+
+      setTilt({ rotateX, rotateY, glareX, glareY });
+      setIsTilting(true);
+    };
+
+    card.addEventListener('mousemove', handleMouseMove);
+    card.addEventListener('mouseleave', handleMouseLeave);
+    
+    // Request gyroscope permission on iOS
+    if (typeof DeviceOrientationEvent !== 'undefined' && 
+        typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      // iOS 13+ requires permission
+      (DeviceOrientationEvent as any).requestPermission()
+        .then((response: string) => {
+          if (response === 'granted') {
+            window.addEventListener('deviceorientation', handleDeviceOrientation);
+          }
+        })
+        .catch(() => {});
+    } else {
+      // Non-iOS devices
+      window.addEventListener('deviceorientation', handleDeviceOrientation);
+    }
+
+    return () => {
+      card.removeEventListener('mousemove', handleMouseMove);
+      card.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+    };
+  }, [enabled, cardRef]);
+
+  return { tilt, isTilting };
+}
+
+// Check if profile qualifies for holographic effect
+function isHoloProfile(profile: FeedUser): boolean {
+  return profile.wallet_rank === 'WHALE' || profile.market_price > 500;
+}
+
+// ============================================
 // Single Swipe Card Component
 // ============================================
 
@@ -306,6 +401,11 @@ function SwipeCard({
   const [livePrice, setLivePrice] = useState(profile.market_price);
   const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'neutral'>('neutral');
   const [priceFlash, setPriceFlash] = useState(false);
+
+  // 3D Tilt for holographic cards
+  const cardRef = useRef<HTMLDivElement>(null);
+  const isHolo = isHoloProfile(profile);
+  const { tilt, isTilting } = use3DTilt(isTop && isHolo && !isMystery, cardRef);
 
   // Handle button swipe trigger
   useEffect(() => {
@@ -476,9 +576,19 @@ function SwipeCard({
   // Show mystery if not revealed
   const showMystery = isMystery && !mysteryRevealed;
 
+  // Holo card class names
+  const holoClasses = isHolo && !showMystery
+    ? `holo-card ${profile.wallet_rank === 'WHALE' ? 'holo-whale' : 'holo-premium'} ${isTilting ? 'tilting' : ''}`
+    : '';
+
+  // 3D tilt transform style
+  const tiltTransform = isHolo && isTop && !showMystery
+    ? `perspective(1000px) rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`
+    : '';
+
   return (
     <motion.div
-      className="absolute inset-4 cursor-grab active:cursor-grabbing"
+      className={`absolute inset-4 cursor-grab active:cursor-grabbing ${isHolo && isTop ? 'card-3d-wrapper' : ''}`}
       style={{
         x: isTop ? x : 0,
         rotate: isTop ? rotate : 0,
@@ -503,17 +613,29 @@ function SwipeCard({
       }}
       whileTap={isTop ? { scale: 1.02 } : {}}
     >
-      {/* Card Container */}
+      {/* Card Container with 3D Tilt and Holo Effect */}
       <motion.div
-        className="h-full rounded-3xl overflow-hidden relative"
+        ref={cardRef}
+        className={`h-full rounded-3xl overflow-hidden relative ${holoClasses} ${isHolo && isTop ? 'card-3d' : ''}`}
         style={{
           backgroundColor: '#12121a',
           borderWidth: 2,
           borderStyle: 'solid',
           borderColor: isTop ? borderColor : 'rgba(255, 255, 255, 0.1)',
           boxShadow: isTop ? boxShadow : '0 10px 40px rgba(0, 0, 0, 0.5)',
+          transform: tiltTransform,
         }}
       >
+        {/* Holo Sparkle Effect */}
+        {isHolo && isTop && !showMystery && (
+          <div 
+            className="holo-sparkle"
+            style={{
+              background: `radial-gradient(circle at ${tilt.glareX}% ${tilt.glareY}%, rgba(255,255,255,0.3) 0%, transparent 50%)`,
+            }}
+          />
+        )}
+
         {/* Mystery Card Overlay */}
         {showMystery && (
           <MysteryCardOverlay onUnlock={() => setMysteryRevealed(true)} />
@@ -522,7 +644,7 @@ function SwipeCard({
         {/* Background Image */}
         <div className="absolute inset-0">
           <img
-            src={profile.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.id}`}
+            src={getAvatarUrl(profile)}
             alt={profile.display_name}
             className={`w-full h-1/2 object-cover object-top ${showMystery ? 'opacity-10 blur-xl' : 'opacity-50'}`}
           />
@@ -532,11 +654,25 @@ function SwipeCard({
         {/* Whale Indicator */}
         {profile.wallet_rank === 'WHALE' && !showMystery && (
           <motion.div
-            className="absolute top-4 right-4 z-10"
+            className="absolute top-4 right-4 z-20"
             animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
             <span className="text-4xl drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">🐋</span>
+          </motion.div>
+        )}
+
+        {/* Premium Badge for high-value profiles (non-Whale but > $500) */}
+        {profile.wallet_rank !== 'WHALE' && profile.market_price > 500 && !showMystery && (
+          <motion.div
+            className="absolute top-4 right-4 z-20 holo-badge"
+            animate={{ scale: [1, 1.05, 1] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            <div className="px-3 py-1 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              PREMIUM
+            </div>
           </motion.div>
         )}
 

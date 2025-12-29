@@ -9,7 +9,9 @@ const {
   getMatches, 
   getMatchById, 
   mintContract, 
-  burnContract 
+  burnContract,
+  harvestLove,
+  getFarmingStatus,
 } = require('../controllers/matchesController');
 const { authMiddleware } = require('../middlewares');
 
@@ -29,6 +31,12 @@ router.get('/', getMatches);
 router.get('/:id', getMatchById);
 
 /**
+ * GET /api/matches/:id/farming
+ * Get yield farming status for a relationship
+ */
+router.get('/:id/farming', getFarmingStatus);
+
+/**
  * POST /api/matches/:id/mint
  * Mint relationship NFT contract
  */
@@ -39,5 +47,11 @@ router.post('/:id/mint', mintContract);
  * Burn (end) relationship contract
  */
 router.post('/:id/burn', burnContract);
+
+/**
+ * POST /api/matches/:id/harvest
+ * Harvest accrued $LOVE from yield farming
+ */
+router.post('/:id/harvest', harvestLove);
 
 module.exports = router;

@@ -113,7 +113,16 @@ export default function ChatPage() {
     return (
       <div className="h-full flex flex-col">
         {/* Header */}
-        <div className="p-4 bg-dark-100/50 backdrop-blur-sm border-b border-white/10">
+        <div className="p-4 bg-dark-100/50 backdrop-blur-sm border-b border-white/10 flex items-center gap-3">
+          <button
+            onClick={() => {
+              haptic.impact('light');
+              navigate(-1);
+            }}
+            className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <h1 className="text-xl font-bold flex items-center gap-2">
             <MessageCircle className="w-6 h-6 text-primary" />
             Messages

@@ -3,9 +3,9 @@
  * Entry point
  */
 
-// Load environment variables FIRST (from root .env)
+// Load environment variables FIRST (from server/.env)
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const express = require('express');
 const cors = require('cors');
@@ -17,6 +17,9 @@ const { checkDbConnection } = require('./config/db');
 
 // Telegram Bot
 const { initBot } = require('./services/telegramBot');
+
+// Workers
+const { initMarketMaker } = require('./workers/marketMaker');
 
 // Middlewares
 const { notFound, errorHandler } = require('./middlewares');
@@ -97,6 +100,9 @@ async function startServer() {
   } else {
     console.warn('⚠️  BOT_TOKEN not set. Bot relay features disabled.');
   }
+  
+  // Initialize Market Maker (Automated Trading Bots)
+  initMarketMaker();
   
   // Start Express server
   app.listen(config.port, () => {

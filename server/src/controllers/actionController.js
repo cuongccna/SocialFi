@@ -99,6 +99,12 @@ async function swipe(req, res, next) {
       priceChange = multiplier;
       newPrice = priceResult.rows[0].market_price;
       
+      // Record price history for charts
+      await client.query(`
+        INSERT INTO price_history (user_id, price)
+        VALUES ($1, $2);
+      `, [targetId, newPrice]);
+      
     } else if (action === 'PASS') {
       // PASS: -0.2%
       const multiplier = config.constants.PRICE_CHANGE_PASS;
@@ -115,6 +121,12 @@ async function swipe(req, res, next) {
       
       priceChange = multiplier;
       newPrice = priceResult.rows[0].market_price;
+      
+      // Record price history for charts
+      await client.query(`
+        INSERT INTO price_history (user_id, price)
+        VALUES ($1, $2);
+      `, [targetId, newPrice]);
     }
     
     // 5. Calculate $LOVE tokens with bonuses
@@ -181,14 +193,23 @@ async function swipe(req, res, next) {
         relationship = relationshipResult.rows[0];
         
         // MATCH PUMP: Both users get +5% market price
-        await client.query(`
+        const matchPumpResult = await client.query(`
           UPDATE users 
           SET 
             market_price = market_price + (market_price * $1 / 100),
             price_change_24h = price_change_24h + $1,
             updated_at = NOW()
-          WHERE id IN ($2, $3);
+          WHERE id IN ($2, $3)
+          RETURNING id, market_price;
         `, [config.constants.PRICE_CHANGE_MATCH, actorId, targetId]);
+        
+        // Record match pump price history for both users
+        for (const user of matchPumpResult.rows) {
+          await client.query(`
+            INSERT INTO price_history (user_id, price)
+            VALUES ($1, $2);
+          `, [user.id, user.market_price]);
+        }
       }
     }
     

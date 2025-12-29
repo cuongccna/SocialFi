@@ -65,6 +65,7 @@ export default {
         'slide-down': 'slide-down 0.3s ease-out',
         'fade-in': 'fade-in 0.2s ease-out',
         'bounce-in': 'bounce-in 0.5s ease-out',
+        'shimmer': 'shimmer 2.5s ease-in-out infinite',
       },
       keyframes: {
         'pulse-glow': {
@@ -88,6 +89,10 @@ export default {
           '50%': { transform: 'scale(1.05)' },
           '70%': { transform: 'scale(0.9)' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        'shimmer': {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
         },
       },
       boxShadow: {

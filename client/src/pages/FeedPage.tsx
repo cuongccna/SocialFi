@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { RefreshCw, MapPin, Heart, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import CardStack, { type CardStackHandle } from '../components/CardStack';
 import MatchPopup from '../components/MatchPopup';
 import { haptic } from '../utils/telegram';
@@ -8,6 +9,80 @@ import { getFeed, refreshFeed } from '../services/feed.service';
 import { swipeRight, swipeLeft } from '../services/swipe.service';
 import type { FeedUser, SwipeResult } from '../types';
 
+// ============================================
+// Particle Effect Component - Rockets/Candles UP
+// ============================================
+function LongParticleEffect({ show, onComplete }: { show: boolean; onComplete: () => void }) {
+  useEffect(() => {
+    if (show) {
+      const timer = setTimeout(onComplete, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [show, onComplete]);
+
+  if (!show) return null;
+
+  const particles = Array.from({ length: 12 }, (_, i) => ({
+    id: i,
+    x: -30 + Math.random() * 60, // Spread around button
+    delay: Math.random() * 0.2,
+    emoji: ['🚀', '📈', '💚', '🟢'][Math.floor(Math.random() * 4)],
+  }));
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-visible">
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{ y: 0, x: p.x, opacity: 1, scale: 1 }}
+          animate={{ y: -150, opacity: 0, scale: 0.5 }}
+          transition={{ duration: 0.8, delay: p.delay, ease: 'easeOut' }}
+          className="absolute bottom-0 left-1/2 text-2xl"
+        >
+          {p.emoji}
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// Particle Effect Component - Red particles DOWN
+// ============================================
+function ShortParticleEffect({ show, onComplete }: { show: boolean; onComplete: () => void }) {
+  useEffect(() => {
+    if (show) {
+      const timer = setTimeout(onComplete, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [show, onComplete]);
+
+  if (!show) return null;
+
+  const particles = Array.from({ length: 10 }, (_, i) => ({
+    id: i,
+    x: -25 + Math.random() * 50,
+    delay: Math.random() * 0.15,
+    emoji: ['📉', '💔', '🔴', '❌'][Math.floor(Math.random() * 4)],
+  }));
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-visible">
+      {particles.map((p) => (
+        <motion.div
+          key={p.id}
+          initial={{ y: 0, x: p.x, opacity: 1, scale: 1 }}
+          animate={{ y: 100, opacity: 0, scale: 0.3, rotate: 180 }}
+          transition={{ duration: 0.7, delay: p.delay, ease: 'easeIn' }}
+          className="absolute top-0 left-1/2 text-xl"
+        >
+          {p.emoji}
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
 export default function FeedPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<FeedUser[]>([]);
@@ -15,6 +90,11 @@ export default function FeedPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [swipeCount, setSwipeCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false); // Prevent button spam
+  
+  // Particle effect states
+  const [showLongParticles, setShowLongParticles] = useState(false);
+  const [showShortParticles, setShowShortParticles] = useState(false);
   
   // Ref for CardStack to trigger swipe from buttons
   const cardStackRef = useRef<CardStackHandle>(null);
@@ -66,6 +146,7 @@ export default function FeedPage() {
     console.log(`📊 ${action} on:`, profile.display_name, `($${profile.market_price})`, swipeInfo);
     
     setSwipeCount(prev => prev + 1);
+    setIsProcessing(true);
     
     try {
       // Call API to record swipe with mystery/vip flags
@@ -99,6 +180,9 @@ export default function FeedPage() {
     } catch (err) {
       console.error('Failed to record swipe:', err);
       // Don't block UI - swipe already happened visually
+    } finally {
+      // Re-enable buttons after a short delay
+      setTimeout(() => setIsProcessing(false), 300);
     }
   }, []);
 
@@ -261,26 +345,64 @@ export default function FeedPage() {
       {/* Bottom Action Buttons */}
       <div className="p-4 flex justify-center gap-6">
         {/* SHORT Button */}
-        <button
-          className="w-16 h-16 rounded-full bg-danger/20 border-2 border-danger/50 flex items-center justify-center hover:bg-danger/30 hover:scale-110 transition-all active:scale-95"
-          onClick={() => {
-            haptic.impact('medium');
-            cardStackRef.current?.triggerSwipe('left');
-          }}
-        >
-          <X className="w-8 h-8 text-danger" />
-        </button>
+        <div className="relative">
+          <AnimatePresence>
+            {showShortParticles && (
+              <ShortParticleEffect 
+                show={showShortParticles} 
+                onComplete={() => setShowShortParticles(false)} 
+              />
+            )}
+          </AnimatePresence>
+          <motion.button
+            disabled={isProcessing || users.length === 0}
+            whileTap={{ scale: 0.9 }}
+            animate={showShortParticles ? { x: [-5, 5, -5, 5, 0] } : {}}
+            transition={{ duration: 0.3 }}
+            className={`w-16 h-16 rounded-full bg-danger/20 border-2 border-danger/50 flex items-center justify-center transition-all ${
+              isProcessing || users.length === 0
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-danger/30 hover:scale-110'
+            }`}
+            onClick={() => {
+              if (isProcessing || users.length === 0) return;
+              haptic.impact('medium');
+              setShowShortParticles(true);
+              cardStackRef.current?.triggerSwipe('left');
+            }}
+          >
+            <X className="w-8 h-8 text-danger" />
+          </motion.button>
+        </div>
         
         {/* LONG Button */}
-        <button
-          className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center hover:bg-primary/30 hover:scale-110 transition-all active:scale-95"
-          onClick={() => {
-            haptic.impact('medium');
-            cardStackRef.current?.triggerSwipe('right');
-          }}
-        >
-          <Heart className="w-8 h-8 text-primary" />
-        </button>
+        <div className="relative">
+          <AnimatePresence>
+            {showLongParticles && (
+              <LongParticleEffect 
+                show={showLongParticles} 
+                onComplete={() => setShowLongParticles(false)} 
+              />
+            )}
+          </AnimatePresence>
+          <motion.button
+            disabled={isProcessing || users.length === 0}
+            whileTap={{ scale: 0.9 }}
+            className={`w-16 h-16 rounded-full bg-primary/20 border-2 border-primary/50 flex items-center justify-center transition-all ${
+              isProcessing || users.length === 0
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-primary/30 hover:scale-110'
+            }`}
+            onClick={() => {
+              if (isProcessing || users.length === 0) return;
+              haptic.impact('medium');
+              setShowLongParticles(true);
+              cardStackRef.current?.triggerSwipe('right');
+            }}
+          >
+            <Heart className="w-8 h-8 text-primary" />
+          </motion.button>
+        </div>
       </div>
     </div>
   );

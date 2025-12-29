@@ -1,0 +1,238 @@
+/**
+ * HoloCard.css - Holographic Card Effect
+ * Premium rainbow iridescent foil effect for Whale/High-value profiles
+ */
+
+/* Base Holo Card Container */
+.holo-card {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Holographic Rainbow Overlay */
+.holo-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.6;
+  mix-blend-mode: color-dodge;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 0, 0, 0.3) 0%,
+    rgba(255, 154, 0, 0.3) 10%,
+    rgba(208, 222, 33, 0.3) 20%,
+    rgba(79, 220, 74, 0.3) 30%,
+    rgba(63, 218, 216, 0.3) 40%,
+    rgba(47, 201, 226, 0.3) 50%,
+    rgba(28, 127, 238, 0.3) 60%,
+    rgba(95, 21, 242, 0.3) 70%,
+    rgba(186, 12, 248, 0.3) 80%,
+    rgba(251, 7, 217, 0.3) 90%,
+    rgba(255, 0, 0, 0.3) 100%
+  );
+  background-size: 200% 200%;
+  animation: holoShimmer 6s ease-in-out infinite;
+  filter: blur(0.5px);
+}
+
+/* Secondary layer for depth */
+.holo-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.4;
+  mix-blend-mode: overlay;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 2px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 2px
+    );
+  background-size: 4px 4px;
+}
+
+/* Sparkle effect layer */
+.holo-sparkle {
+  position: absolute;
+  inset: 0;
+  z-index: 16;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.holo-sparkle::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(255, 255, 255, 0) 40%
+  );
+  opacity: 0;
+  animation: holoGlint 4s ease-in-out infinite;
+  transform: rotate(45deg);
+}
+
+/* Shimmer animation */
+@keyframes holoShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Glint animation */
+@keyframes holoGlint {
+  0%, 100% {
+    opacity: 0;
+    transform: translateX(-100%) rotate(45deg);
+  }
+  15%, 25% {
+    opacity: 0.3;
+  }
+  20% {
+    opacity: 0.5;
+    transform: translateX(100%) rotate(45deg);
+  }
+}
+
+/* 3D Tilt Container */
+.card-3d-wrapper {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.1s ease-out;
+  will-change: transform;
+}
+
+/* Enhanced border glow for holo cards */
+.holo-card-border {
+  position: relative;
+}
+
+.holo-card-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    #ff0000 0%,
+    #ff7f00 14%,
+    #ffff00 28%,
+    #00ff00 42%,
+    #0000ff 57%,
+    #4b0082 71%,
+    #8f00ff 85%,
+    #ff0000 100%
+  );
+  background-size: 300% 300%;
+  animation: borderRainbow 3s linear infinite;
+  opacity: 0.7;
+  filter: blur(4px);
+}
+
+@keyframes borderRainbow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+
+/* Premium badge glow */
+.holo-badge {
+  position: relative;
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(147, 51, 234, 0.5),
+                0 0 20px rgba(147, 51, 234, 0.3),
+                0 0 30px rgba(147, 51, 234, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(147, 51, 234, 0.8),
+                0 0 30px rgba(147, 51, 234, 0.5),
+                0 0 45px rgba(147, 51, 234, 0.2);
+  }
+}
+
+/* Whale-specific enhancements */
+.holo-whale::before {
+  opacity: 0.8;
+  filter: blur(0px);
+  background: linear-gradient(
+    125deg,
+    rgba(59, 130, 246, 0.5) 0%,
+    rgba(147, 51, 234, 0.5) 20%,
+    rgba(236, 72, 153, 0.5) 40%,
+    rgba(251, 191, 36, 0.5) 60%,
+    rgba(52, 211, 153, 0.5) 80%,
+    rgba(59, 130, 246, 0.5) 100%
+  );
+  background-size: 200% 200%;
+}
+
+/* High price profile enhancements */
+.holo-premium::before {
+  opacity: 0.7;
+  background: linear-gradient(
+    125deg,
+    rgba(251, 191, 36, 0.4) 0%,
+    rgba(245, 158, 11, 0.4) 25%,
+    rgba(252, 211, 77, 0.4) 50%,
+    rgba(251, 191, 36, 0.4) 75%,
+    rgba(217, 119, 6, 0.4) 100%
+  );
+  background-size: 200% 200%;
+}
+
+/* Interactive state - when tilting */
+.holo-card.tilting::before {
+  animation: none;
+  transition: background-position 0.1s ease-out;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .holo-card::before,
+  .holo-sparkle::before,
+  .holo-card-border::before,
+  .holo-badge {
+    animation: none;
+  }
+  
+  .holo-card::before {
+    opacity: 0.4;
+  }
+}

@@ -3,7 +3,13 @@
  * User profile and stats
  */
 
-const { pool, query } = require('../config/db');
+const { pool, query, getClient } = require('../config/db');
+const { ApiError } = require('../middlewares');
+
+// Boost Constants
+const BOOST_COST_LOVE = 500;        // Cost in $LOVE tokens
+const BOOST_DURATION_MINUTES = 30;  // Boost duration
+const BOOST_PRICE_INCREASE = 10;    // 10% price pump
 
 /**
  * GET /users/stats
@@ -166,9 +172,162 @@ async function getUserById(req, res, next) {
   }
 }
 
+/**
+ * POST /users/boost
+ * Boost profile visibility for 30 minutes
+ * Costs 500 $LOVE, instantly pumps market price by 10%
+ */
+async function boostProfile(req, res, next) {
+  const client = await getClient();
+  
+  try {
+    const userId = req.user.id;
+    
+    await client.query('BEGIN');
+    
+    // Get current user with lock
+    const userResult = await client.query(`
+      SELECT 
+        id, 
+        display_name,
+        balance_love, 
+        market_price,
+        boosted_until
+      FROM users 
+      WHERE id = $1
+      FOR UPDATE;
+    `, [userId]);
+    
+    if (userResult.rows.length === 0) {
+      throw new ApiError(404, 'User not found');
+    }
+    
+    const user = userResult.rows[0];
+    const currentBalance = parseFloat(user.balance_love) || 0;
+    
+    // Check if already boosted
+    if (user.boosted_until && new Date(user.boosted_until) > new Date()) {
+      const remainingMinutes = Math.ceil((new Date(user.boosted_until) - new Date()) / (1000 * 60));
+      throw new ApiError(400, `Profile already boosted. ${remainingMinutes} minutes remaining.`);
+    }
+    
+    // Check balance
+    if (currentBalance < BOOST_COST_LOVE) {
+      throw new ApiError(400, `Insufficient $LOVE balance. Need ${BOOST_COST_LOVE}, have ${currentBalance.toFixed(2)}`);
+    }
+    
+    // Calculate new price (10% pump)
+    const currentPrice = parseFloat(user.market_price);
+    const priceIncrease = currentPrice * (BOOST_PRICE_INCREASE / 100);
+    const newPrice = currentPrice + priceIncrease;
+    
+    // Deduct $LOVE, set boost timer, pump price
+    const updateResult = await client.query(`
+      UPDATE users
+      SET 
+        balance_love = balance_love - $1,
+        boosted_until = NOW() + INTERVAL '${BOOST_DURATION_MINUTES} minutes',
+        market_price = $2,
+        price_change_24h = price_change_24h + $3,
+        updated_at = NOW()
+      WHERE id = $4
+      RETURNING 
+        id,
+        display_name,
+        balance_love,
+        market_price,
+        price_change_24h,
+        boosted_until;
+    `, [BOOST_COST_LOVE, newPrice, BOOST_PRICE_INCREASE, userId]);
+    
+    const updatedUser = updateResult.rows[0];
+    
+    // Record price history for the pump
+    await client.query(`
+      INSERT INTO price_history (user_id, price)
+      VALUES ($1, $2);
+    `, [userId, newPrice]);
+    
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      message: `🚀 Profile PUMPED! You're now at the top of the feed for ${BOOST_DURATION_MINUTES} minutes!`,
+      boost: {
+        cost: BOOST_COST_LOVE,
+        duration_minutes: BOOST_DURATION_MINUTES,
+        boosted_until: updatedUser.boosted_until,
+        price_before: currentPrice,
+        price_after: parseFloat(updatedUser.market_price),
+        price_increase_percent: BOOST_PRICE_INCREASE,
+      },
+      user: {
+        id: updatedUser.id,
+        display_name: updatedUser.display_name,
+        balance_love: parseFloat(updatedUser.balance_love),
+        market_price: parseFloat(updatedUser.market_price),
+        price_change_24h: parseFloat(updatedUser.price_change_24h),
+      },
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * GET /users/boost-status
+ * Check current boost status
+ */
+async function getBoostStatus(req, res, next) {
+  try {
+    const userId = req.user.id;
+    
+    const result = await query(`
+      SELECT 
+        boosted_until,
+        balance_love,
+        market_price
+      FROM users 
+      WHERE id = $1;
+    `, [userId]);
+    
+    if (result.rows.length === 0) {
+      throw new ApiError(404, 'User not found');
+    }
+    
+    const user = result.rows[0];
+    const now = new Date();
+    const boostedUntil = user.boosted_until ? new Date(user.boosted_until) : null;
+    const isBoosted = boostedUntil && boostedUntil > now;
+    const remainingMinutes = isBoosted ? Math.ceil((boostedUntil - now) / (1000 * 60)) : 0;
+    
+    res.json({
+      success: true,
+      boost_status: {
+        is_boosted: isBoosted,
+        boosted_until: user.boosted_until,
+        remaining_minutes: remainingMinutes,
+        boost_cost: BOOST_COST_LOVE,
+        boost_duration: BOOST_DURATION_MINUTES,
+        can_afford: parseFloat(user.balance_love) >= BOOST_COST_LOVE,
+        current_balance: parseFloat(user.balance_love),
+      },
+    });
+    
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getUserStats,
   getCurrentUser,
   updateProfile,
   getUserById,
+  boostProfile,
+  getBoostStatus,
 };

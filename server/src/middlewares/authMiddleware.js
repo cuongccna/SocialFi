@@ -148,18 +148,29 @@ async function authMiddleware(req, res, next) {
         }
       }
       
-      // If no specific user, use first user in database
-      if (!authHeader || authHeader === 'mock_init_data_for_development') {
-        const userResult = await query(
-          'SELECT * FROM users WHERE is_active = TRUE ORDER BY created_at ASC LIMIT 1'
-        );
-        
-        if (userResult.rows.length > 0) {
-          req.user = userResult.rows[0];
-          req.telegramData = { user: { id: req.user.telegram_id }, authDate: Date.now() / 1000 };
-          console.log(`🔓 DEV AUTH (default): ${req.user.display_name} (${req.user.telegram_id})`);
-          return next();
-        }
+      // In dev mode, bypass ALL auth and use first active user
+      // This catches Bearer tokens, mock data, or any other header
+      const userResult = await query(
+        'SELECT * FROM users WHERE is_active = TRUE AND is_bot = FALSE ORDER BY created_at ASC LIMIT 1'
+      );
+      
+      if (userResult.rows.length > 0) {
+        req.user = userResult.rows[0];
+        req.telegramData = { user: { id: req.user.telegram_id }, authDate: Date.now() / 1000 };
+        console.log(`🔓 DEV AUTH (bypass): ${req.user.display_name} (${req.user.telegram_id})`);
+        return next();
+      }
+      
+      // Fallback: try any user including bots
+      const anyUserResult = await query(
+        'SELECT * FROM users ORDER BY created_at ASC LIMIT 1'
+      );
+      
+      if (anyUserResult.rows.length > 0) {
+        req.user = anyUserResult.rows[0];
+        req.telegramData = { user: { id: req.user.telegram_id }, authDate: Date.now() / 1000 };
+        console.log(`🔓 DEV AUTH (fallback): ${req.user.display_name} (${req.user.telegram_id})`);
+        return next();
       }
     }
     // =========================================

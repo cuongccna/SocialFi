@@ -67,6 +67,8 @@ async function getFeed(req, res, next) {
         u.wallet_rank,
         u.market_price,
         u.price_change_24h,
+        u.boosted_until,
+        CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
         ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2) AS distance_km,
         'nearby' AS source
       FROM users u
@@ -83,6 +85,9 @@ async function getFeed(req, res, next) {
           WHERE actor_id = $3
         )
       ORDER BY 
+        -- Boosted profiles always at top
+        CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END ASC,
+        u.boosted_until DESC NULLS LAST,
         u.market_price DESC,
         calculate_distance_km($1, $2, u.latitude, u.longitude) ASC
       LIMIT $5
@@ -111,6 +116,8 @@ async function getFeed(req, res, next) {
           u.wallet_rank,
           u.market_price,
           u.price_change_24h,
+          u.boosted_until,
+          CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
           CASE 
             WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
             THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
@@ -129,6 +136,9 @@ async function getFeed(req, res, next) {
             WHERE actor_id = $3
           )
         ORDER BY 
+          -- Boosted profiles always at top
+          CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END ASC,
+          u.boosted_until DESC NULLS LAST,
           u.market_price DESC,
           u.created_at DESC
         LIMIT $5;
@@ -192,6 +202,8 @@ async function getFeed(req, res, next) {
             u.wallet_rank,
             u.market_price,
             u.price_change_24h,
+            u.boosted_until,
+            CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
             CASE 
               WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
               THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
@@ -202,7 +214,10 @@ async function getFeed(req, res, next) {
           WHERE u.id = ANY($3::uuid[])
             AND u.is_active = TRUE
             AND u.id != ALL($4::uuid[])
-          ORDER BY u.market_price DESC;
+          ORDER BY 
+            CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END ASC,
+            u.boosted_until DESC NULLS LAST,
+            u.market_price DESC;
         `;
         
         const resurrectedResult = await query(resurrectedQuery, [lat, lng, passedUserIds, excludeIds]);
@@ -225,6 +240,8 @@ async function getFeed(req, res, next) {
         u.wallet_rank,
         u.market_price,
         u.price_change_24h,
+        u.boosted_until,
+        CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
         CASE 
           WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
           THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
@@ -278,12 +295,52 @@ async function getFeed(req, res, next) {
     const countResult = await query(countQuery, [userId]);
     const totalAvailable = parseInt(countResult.rows[0].total);
     
+    // =========================================
+    // STEP 5: Enrich users with chart_data (last 20 prices)
+    // =========================================
+    if (users.length > 0) {
+      const userIds = users.map(u => u.id);
+      
+      // Fetch chart data for all users in one query
+      const chartQuery = `
+        SELECT 
+          user_id,
+          ARRAY_AGG(price ORDER BY recorded_at ASC) AS chart_data
+        FROM (
+          SELECT 
+            user_id,
+            price,
+            recorded_at,
+            ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY recorded_at DESC) AS rn
+          FROM price_history
+          WHERE user_id = ANY($1::uuid[])
+        ) sub
+        WHERE rn <= 20
+        GROUP BY user_id;
+      `;
+      
+      const chartResult = await query(chartQuery, [userIds]);
+      
+      // Create a map of user_id -> chart_data
+      const chartDataMap = {};
+      for (const row of chartResult.rows) {
+        chartDataMap[row.user_id] = row.chart_data || [];
+      }
+      
+      // Enrich users with chart_data
+      users = users.map(user => ({
+        ...user,
+        chart_data: chartDataMap[user.id] || [user.market_price], // Fallback to current price if no history
+      }));
+    }
+    
     // Count by source
     const sourceBreakdown = {
       nearby: users.filter(u => u.source === 'nearby').length,
       global: users.filter(u => u.source === 'global').length,
       resurrected: users.filter(u => u.source === 'resurrected').length,
       vip: users.filter(u => u.source === 'vip').length,
+      boosted: users.filter(u => u.is_boosted).length,
     };
     
     res.json({
