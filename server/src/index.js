@@ -96,7 +96,7 @@ async function startServer() {
   
   // Initialize Telegram Bot (if token provided)
   if (config.botToken) {
-    initBot(config.botToken);
+    await initBot(config.botToken);
   } else {
     console.warn('⚠️  BOT_TOKEN not set. Bot relay features disabled.');
   }
