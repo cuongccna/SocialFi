@@ -416,6 +416,33 @@ server {
         proxy_read_timeout 300s;
     }
     
+    # Socket.io WebSocket for real-time chat
+    location /socket.io/ {
+        proxy_pass http://cryptocrush_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 7d;
+        proxy_send_timeout 7d;
+        proxy_read_timeout 7d;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffering off;
+    }
+    
+    # Public static files (backend)
+    location /public/ {
+        proxy_pass http://cryptocrush_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    
     location /tonconnect-manifest.json {
         add_header Access-Control-Allow-Origin *;
         add_header Cache-Control "public, max-age=3600";
@@ -479,6 +506,33 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
         proxy_read_timeout 300s;
+    }
+    
+    # Socket.io WebSocket for real-time chat
+    location /socket.io/ {
+        proxy_pass http://cryptocrush_api;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 7d;
+        proxy_send_timeout 7d;
+        proxy_read_timeout 7d;
+        proxy_cache_bypass $http_upgrade;
+        proxy_buffering off;
+    }
+    
+    # Public static files (backend)
+    location /public/ {
+        proxy_pass http://cryptocrush_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
     
     location /tonconnect-manifest.json {
@@ -709,7 +763,7 @@ show_migrations_info() {
     echo ""
     log_info "=== Database Migrations ==="
     echo ""
-    echo -e "${YELLOW}database/migrations/ (11 files):${NC}"
+    echo -e "${YELLOW}database/migrations/ (13 files):${NC}"
     echo "  001_initial_schema.sql          - Core tables (users, swipes)"
     echo "  001_initial_schema_no_postgis.sql - No PostGIS version"
     echo "  002_add_messages.sql            - Chat/messaging system"
@@ -721,6 +775,8 @@ show_migrations_info() {
     echo "  008_add_yield_farming.sql       - Yield farming system"
     echo "  009_add_boost_system.sql        - Profile boost"
     echo "  010_add_fud_system.sql          - FUD mechanism"
+    echo "  012_add_joint_balance.sql       - Joint Venture (Chat-to-Earn)"
+    echo "  013_add_message_type.sql        - Message types (TEXT/IMAGE/STICKER)"
     echo ""
     echo -e "${YELLOW}server/migrations/ (1 file):${NC}"
     echo "  011_add_is_vip_column.sql       - VIP user support"
@@ -735,6 +791,7 @@ show_migrations_info() {
     echo "  helmet           - Security headers"
     echo "  node-cron        - Scheduled tasks (market maker)"
     echo "  pg               - PostgreSQL client"
+    echo "  socket.io        - Real-time WebSocket (Chat)"
     echo ""
     log_info "=== Required Environment Variables ==="
     echo ""
