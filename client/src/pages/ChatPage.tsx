@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Send, Loader2, MessageCircle, Heart, Coins 
@@ -14,6 +14,7 @@ import {
 } from '../services/messages.service';
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../utils/telegram';
+import { useSocket } from '../hooks/useSocket';
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -31,9 +32,51 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [jointBalance, setJointBalance] = useState(0);
   const [showBalanceBump, setShowBalanceBump] = useState(false);
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const [floatingRewards, setFloatingRewards] = useState<{ id: number; x: number; y: number }[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sendButtonRef = useRef<HTMLButtonElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Real-time socket connection
+  const handleNewMessage = useCallback((message: Message) => {
+    // Only add if not from current user (already added optimistically)
+    if (message.sender_id !== user?.id) {
+      setMessages(prev => [...prev, message]);
+      haptic.notification('success');
+      // Scroll to bottom
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
+  }, [user?.id]);
+
+  const handleBalanceUpdate = useCallback((data: { joint_balance: number }) => {
+    setJointBalance(data.joint_balance);
+    setShowBalanceBump(true);
+    setTimeout(() => setShowBalanceBump(false), 500);
+  }, []);
+
+  const handleTyping = useCallback((data: { userId: number; isTyping: boolean }) => {
+    if (String(data.userId) !== String(user?.id)) {
+      setIsPartnerTyping(data.isTyping);
+    }
+  }, [user?.id]);
+
+  const { 
+    isConnected, 
+    sendMessage: socketSendMessage, 
+    startTyping, 
+    stopTyping,
+    markAsRead 
+  } = useSocket({
+    conversationId: selectedConversation ? parseInt(selectedConversation.relationship_id) : undefined,
+    onMessage: (msg) => handleNewMessage(msg as unknown as Message),
+    onBalanceUpdate: handleBalanceUpdate,
+    onTyping: handleTyping,
+  });
 
   // Load conversations on mount
   useEffect(() => {
@@ -66,10 +109,16 @@ export default function ChatPage() {
     setSelectedConversation(conversation);
     setJointBalance(Number(conversation.joint_balance) || 0);
     setMessages([]);
+    setIsPartnerTyping(false);
     
     try {
       const { messages: msgs } = await getMessages(conversation.relationship_id);
       setMessages(msgs);
+      
+      // Mark messages as read via socket
+      setTimeout(() => {
+        markAsRead();
+      }, 500);
       
       // Scroll to bottom
       setTimeout(() => {
@@ -87,15 +136,56 @@ export default function ChatPage() {
     setNewMessage('');
     setIsSending(true);
     haptic.impact('light');
+    
+    // Stop typing indicator
+    stopTyping();
+
+    // Optimistically add message
+    const optimisticMessage: Message = {
+      id: String(Date.now()),
+      relationship_id: selectedConversation.relationship_id,
+      sender_id: String(user?.id || ''),
+      sender_name: user?.display_name || '',
+      sender_avatar: user?.avatar_url || null,
+      content,
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
 
     try {
-      const message = await sendMessage(selectedConversation.relationship_id, content);
-      setMessages(prev => [...prev, message]);
+      // Use socket if connected, otherwise fall back to REST API
+      if (isConnected) {
+        socketSendMessage(content, 'TEXT');
+        // Animate joint balance increment (socket will confirm with update_balance)
+        setJointBalance(prev => prev + 0.1);
+        setShowBalanceBump(true);
+        setTimeout(() => setShowBalanceBump(false), 500);
+      } else {
+        const message = await sendMessage(selectedConversation.relationship_id, content);
+        // Replace optimistic message with real one
+        setMessages(prev => prev.map(m => 
+          m.id === optimisticMessage.id ? message : m
+        ));
+        // Animate joint balance increment
+        setJointBalance(prev => prev + 0.1);
+        setShowBalanceBump(true);
+        setTimeout(() => setShowBalanceBump(false), 500);
+      }
       
-      // Animate joint balance increment
-      setJointBalance(prev => prev + 0.1);
-      setShowBalanceBump(true);
-      setTimeout(() => setShowBalanceBump(false), 500);
+      // Trigger floating +0.1 $LOVE animation
+      const rewardId = Date.now();
+      const buttonRect = sendButtonRef.current?.getBoundingClientRect();
+      if (buttonRect) {
+        setFloatingRewards(prev => [...prev, { 
+          id: rewardId, 
+          x: buttonRect.left + buttonRect.width / 2,
+          y: buttonRect.top 
+        }]);
+        setTimeout(() => {
+          setFloatingRewards(prev => prev.filter(r => r.id !== rewardId));
+        }, 1500);
+      }
       
       // Scroll to bottom
       setTimeout(() => {
@@ -114,6 +204,26 @@ export default function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  // Handle input change with typing indicator
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    
+    // Send typing indicator
+    if (isConnected && e.target.value.length > 0) {
+      startTyping();
+      
+      // Clear previous timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      
+      // Stop typing after 2 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        stopTyping();
+      }, 2000);
     }
   };
 
@@ -243,42 +353,71 @@ export default function ChatPage() {
           </div>
         </div>
         
-        {/* Joint Venture Pool */}
+        {/* Joint Venture Pool - THE TICKER */}
         <motion.div 
-          className="mt-3 bg-gradient-to-r from-neon-yellow/20 via-primary/10 to-neon-yellow/20 rounded-xl p-3 flex items-center justify-between"
-          animate={showBalanceBump ? { scale: [1, 1.02, 1] } : {}}
+          className="mt-3 relative overflow-hidden rounded-xl"
+          animate={showBalanceBump ? { scale: [1, 1.03, 1] } : {}}
           transition={{ duration: 0.3 }}
         >
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-neon-yellow/20 flex items-center justify-center">
-              <Coins className="w-4 h-4 text-neon-yellow" />
+          {/* Animated gradient background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/20 via-green-500/20 to-yellow-500/20" />
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400/30 to-transparent"
+            animate={{ x: ['-100%', '100%'] }}
+            transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+          />
+          
+          {/* Glow effect */}
+          <div 
+            className="absolute inset-0 opacity-50"
+            style={{
+              boxShadow: 'inset 0 0 30px rgba(234, 179, 8, 0.3), 0 0 20px rgba(234, 179, 8, 0.2)',
+            }}
+          />
+          
+          <div className="relative p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <motion.div 
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center shadow-lg"
+                animate={{ 
+                  boxShadow: showBalanceBump 
+                    ? ['0 0 20px rgba(234, 179, 8, 0.5)', '0 0 40px rgba(234, 179, 8, 0.8)', '0 0 20px rgba(234, 179, 8, 0.5)']
+                    : '0 0 20px rgba(234, 179, 8, 0.5)'
+                }}
+                transition={{ duration: 0.3 }}
+              >
+                <span className="text-lg">💰</span>
+              </motion.div>
+              <div>
+                <span className="text-xs text-white/60 uppercase tracking-wider font-medium">Joint Pool</span>
+                <div className="text-xs text-green-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  Chat-to-Earn Active
+                </div>
+              </div>
             </div>
-            <span className="text-sm text-white/80">Joint Pool</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <AnimatePresence mode="popLayout">
-              <motion.span
-                key={jointBalance.toFixed(1)}
-                initial={{ y: -20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 20, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                className="text-lg font-bold text-neon-yellow tabular-nums"
-              >
-                {jointBalance.toFixed(1)}
-              </motion.span>
-            </AnimatePresence>
-            <span className="text-sm text-neon-yellow/80">$LOVE</span>
-            {showBalanceBump && (
-              <motion.span
-                initial={{ opacity: 0, y: 0, x: 10 }}
-                animate={{ opacity: 1, y: -10 }}
-                exit={{ opacity: 0 }}
-                className="text-xs text-primary font-bold"
-              >
-                +0.1
-              </motion.span>
-            )}
+            
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <div className="flex items-baseline gap-1">
+                  <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-yellow-400 to-green-400 tabular-nums drop-shadow-[0_0_10px_rgba(234,179,8,0.5)]">
+                    <AnimatePresence mode="popLayout">
+                      <motion.span
+                        key={jointBalance.toFixed(2)}
+                        initial={{ y: -20, opacity: 0, scale: 0.8 }}
+                        animate={{ y: 0, opacity: 1, scale: 1 }}
+                        exit={{ y: 20, opacity: 0, scale: 0.8 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                        className="inline-block"
+                      >
+                        ${jointBalance.toFixed(2)}
+                      </motion.span>
+                    </AnimatePresence>
+                  </span>
+                </div>
+                <span className="text-xs text-yellow-400/80 font-medium">$LOVE</span>
+              </div>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -316,17 +455,54 @@ export default function ChatPage() {
           );
         })}
         
+        {/* Typing indicator */}
+        <AnimatePresence>
+          {isPartnerTyping && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="flex justify-start mb-2"
+            >
+              <div className="bg-dark-200 rounded-2xl rounded-bl-md px-4 py-2 flex items-center gap-1">
+                <motion.span
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 1.4, delay: 0 }}
+                  className="w-2 h-2 bg-white/60 rounded-full"
+                />
+                <motion.span
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 1.4, delay: 0.2 }}
+                  className="w-2 h-2 bg-white/60 rounded-full"
+                />
+                <motion.span
+                  animate={{ opacity: [0.4, 1, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 1.4, delay: 0.4 }}
+                  className="w-2 h-2 bg-white/60 rounded-full"
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
         <div ref={messagesEndRef} />
       </div>
 
       {/* Message Input */}
       <div className="p-4 bg-dark-100/50 backdrop-blur-sm border-t border-white/10">
+        {/* Connection status indicator */}
+        {!isConnected && (
+          <div className="text-xs text-yellow-500/80 mb-2 text-center">
+            ⚠️ Real-time connection lost. Messages will be sent via HTTP.
+          </div>
+        )}
+        
         <div className="flex items-center gap-3">
           <input
             ref={inputRef}
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleInputChange}
             onKeyPress={handleKeyPress}
             placeholder="Type a message..."
             className="flex-1 bg-dark-200 border border-white/20 rounded-full px-4 py-3 focus:border-primary outline-none"
@@ -334,9 +510,10 @@ export default function ChatPage() {
           />
           
           <button
+            ref={sendButtonRef}
             onClick={handleSend}
             disabled={!newMessage.trim() || isSending}
-            className="p-3 rounded-full bg-primary text-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-primary/90 active:scale-95"
+            className="relative p-3 rounded-full bg-primary text-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-primary/90 active:scale-95 shadow-lg shadow-primary/30"
           >
             {isSending ? (
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -346,6 +523,39 @@ export default function ChatPage() {
           </button>
         </div>
       </div>
+      
+      {/* Floating +0.1 $LOVE Rewards */}
+      <AnimatePresence>
+        {floatingRewards.map((reward) => (
+          <motion.div
+            key={reward.id}
+            initial={{ 
+              opacity: 1, 
+              y: 0,
+              x: 0,
+              scale: 1 
+            }}
+            animate={{ 
+              opacity: 0, 
+              y: -100,
+              scale: 1.2
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.2, ease: 'easeOut' }}
+            className="fixed pointer-events-none z-50"
+            style={{ 
+              left: reward.x - 40,
+              top: reward.y - 20,
+            }}
+          >
+            <div className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-yellow-400 to-green-400 rounded-full shadow-lg">
+              <span className="text-dark font-bold text-sm">+0.1</span>
+              <span className="text-dark/80 text-xs">$LOVE</span>
+              <span className="text-base">💰</span>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </div>
   );
 }

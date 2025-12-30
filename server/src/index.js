@@ -8,6 +8,8 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 
@@ -21,6 +23,9 @@ const { initBot } = require('./services/telegramBot');
 // Workers
 const { initMarketMaker } = require('./workers/marketMaker');
 
+// Socket handlers
+const { initChatSocket } = require('./socket/chat');
+
 // Middlewares
 const { notFound, errorHandler } = require('./middlewares');
 
@@ -29,6 +34,18 @@ const apiRoutes = require('./routes');
 
 // Initialize Express app
 const app = express();
+
+// Create HTTP server from Express app
+const server = http.createServer(app);
+
+// Initialize Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: config.corsOrigin || '*',
+    methods: ['GET', 'POST'],
+    credentials: true,
+  },
+});
 
 // ============================================
 // Middleware Stack
@@ -109,10 +126,14 @@ async function startServer() {
   // Initialize Market Maker (Automated Trading Bots)
   initMarketMaker();
   
-  // Start Express server
-  app.listen(config.port, () => {
+  // Initialize Socket.io chat handlers
+  initChatSocket(io);
+  
+  // Start HTTP server (for both Express + Socket.io)
+  server.listen(config.port, () => {
     console.log(`\n✨ Server is running!`);
     console.log(`   🌐 URL: http://localhost:${config.port}`);
+    console.log(`   🔌 WebSocket: ws://localhost:${config.port}`);
     console.log(`   📦 Environment: ${config.nodeEnv}`);
     console.log(`   🔗 Health: http://localhost:${config.port}/api/health\n`);
   });
