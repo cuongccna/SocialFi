@@ -306,6 +306,7 @@ build_app() {
         "helmet"             # Security headers
         "node-cron"          # Scheduled tasks (market maker)
         "pg"                 # PostgreSQL client
+        "socket.io"          # Real-time WebSocket (Server-side)
     )
     
     for pkg in "${CRITICAL_PACKAGES[@]}"; do
@@ -321,6 +322,22 @@ build_app() {
     cd "$APP_DIR/client"
     log_info "Installing frontend dependencies..."
     npm install
+    
+    # Verify critical frontend packages
+    log_info "Verifying critical frontend packages..."
+    CRITICAL_CLIENT_PACKAGES=(
+        "socket.io-client"   # Real-time WebSocket (Client-side)
+        "framer-motion"      # Animations
+    )
+    
+    for pkg in "${CRITICAL_CLIENT_PACKAGES[@]}"; do
+        if ! npm list "$pkg" --depth=0 2>/dev/null | grep -q "$pkg"; then
+            log_warning "Frontend package $pkg not found, installing..."
+            npm install "$pkg" --save
+        else
+            log_info "Frontend package $pkg is installed"
+        fi
+    done
     
     log_info "Building frontend..."
     npm run build
