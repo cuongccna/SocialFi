@@ -48,7 +48,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Static files
-const publicPath = path.join(__dirname, '../public');
+const publicPath = path.join(__dirname, '../../public');
 app.use('/public', express.static(publicPath));
 console.log('📂 Static files being served at /public');
 
