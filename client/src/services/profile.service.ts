@@ -80,3 +80,68 @@ export function getRankEmoji(percentile: number): string {
   if (percentile >= 50) return '📈';
   return '🌱';
 }
+
+// ==========================================
+// Boost (Pump Profile) APIs
+// ==========================================
+
+export interface BoostResult {
+  success: boolean;
+  message: string;
+  user?: {
+    market_price: number;
+    price_change_24h: number;
+    balance_love: number;
+    boosted_until: string;
+  };
+}
+
+/**
+ * Boost profile visibility (costs 500 $LOVE, +10% price, 30 min visibility boost)
+ */
+export async function boostProfile(): Promise<BoostResult> {
+  return await api.post<BoostResult>('/users/boost');
+}
+
+// ==========================================
+// FUD APIs
+// ==========================================
+
+export interface FudResult {
+  success: boolean;
+  message: string;
+  fud?: {
+    target_id: string;
+    target_name: string;
+    price_before: number;
+    price_after: number;
+    price_drop_percent: number;
+    cooldown_hours: number;
+    next_fud_available: string;
+  };
+}
+
+export interface FudStatus {
+  success: boolean;
+  can_fud: boolean;
+  cooldown_remaining_hours?: number;
+  next_fud_available?: string;
+  last_fud?: {
+    created_at: string;
+    price_drop_percent: number;
+  };
+}
+
+/**
+ * FUD a matched user (dumps their price by 15%)
+ */
+export async function fudUser(targetId: string, reason?: string): Promise<FudResult> {
+  return await api.post<FudResult>('/fud', { target_id: targetId, reason });
+}
+
+/**
+ * Check FUD cooldown status for a target user
+ */
+export async function getFudStatus(targetId: string): Promise<FudStatus> {
+  return await api.get<FudStatus>(`/fud/status/${targetId}`);
+}

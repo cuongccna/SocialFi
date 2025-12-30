@@ -65,7 +65,9 @@ async function getMatches(req, res, next) {
           ELSE u_a.last_active_at
         END as last_active_at,
         -- Combined market cap for the relationship
-        (u_a.market_price + u_b.market_price) as combined_market_cap
+        (u_a.market_price + u_b.market_price) as combined_market_cap,
+        -- Joint Venture balance
+        COALESCE(r.joint_balance, 0) as joint_balance
       FROM relationships r
       JOIN users u_a ON r.user_a = u_a.id
       JOIN users u_b ON r.user_b = u_b.id
@@ -114,7 +116,8 @@ async function getMatchById(req, res, next) {
         u_b.display_name as user_b_name,
         u_b.avatar_url as user_b_avatar,
         u_b.market_price as user_b_price,
-        (u_a.market_price + u_b.market_price) as combined_market_cap
+        (u_a.market_price + u_b.market_price) as combined_market_cap,
+        COALESCE(r.joint_balance, 0) as joint_balance
       FROM relationships r
       JOIN users u_a ON r.user_a = u_a.id
       JOIN users u_b ON r.user_b = u_b.id

@@ -106,11 +106,15 @@ export default function JuryPage() {
     try {
       setVoting(true);
       haptic.impact('medium');
+      
+      console.log('🗳️ Voting on dispute:', currentDispute.id, 'Side:', side);
 
-      await api.post(`/disputes/${currentDispute.id}/vote`, {
+      const response = await api.post(`/disputes/${currentDispute.id}/vote`, {
         vote_side: side,
         stake_amount: 5,
       });
+      
+      console.log('✅ Vote response:', response);
 
       haptic.notification('success');
 
@@ -127,8 +131,10 @@ export default function JuryPage() {
       }, 300);
 
     } catch (err: any) {
+      console.error('❌ Vote error:', err);
+      console.error('Error response:', err.response?.data);
       haptic.notification('error');
-      setError(err.response?.data?.message || 'Failed to vote');
+      setError(err.response?.data?.message || err.message || 'Failed to vote');
       setVoting(false);
       setSwipeDirection(null);
     }
@@ -226,6 +232,21 @@ export default function JuryPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-dark-bg pb-24">
+      {/* Error Toast */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-4 left-4 right-4 z-50 bg-neon-red/90 text-white px-4 py-3 rounded-xl flex items-center justify-between"
+          >
+            <span className="text-sm">{error}</span>
+            <button onClick={() => setError(null)} className="text-white/80 hover:text-white ml-2">✕</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       {/* Header */}
       <div className="sticky top-0 z-10 bg-dark-bg/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
         <div className="flex items-center justify-between">
@@ -401,22 +422,34 @@ export default function JuryPage() {
       {currentDispute && (
         <div className="fixed bottom-20 left-0 right-0 px-4 pb-4">
           <div className="flex gap-4">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => { setSwipeDirection('left'); handleVote('PLAINTIFF'); }}
               disabled={voting}
-              className="flex-1 bg-gradient-to-r from-neon-red to-red-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex-1 bg-gradient-to-r from-neon-red to-red-600 text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-neon-red/30 border-2 border-neon-red/50"
             >
-              <ChevronLeft className="w-5 h-5" />
-              Plaintiff
-            </button>
-            <button
+              {voting && swipeDirection === 'left' ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <ChevronLeft className="w-6 h-6" />
+              )}
+              <span className="text-lg">Plaintiff</span>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => { setSwipeDirection('right'); handleVote('DEFENDANT'); }}
               disabled={voting}
-              className="flex-1 bg-gradient-to-r from-neon-green to-green-600 text-dark-bg font-bold py-4 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex-1 bg-gradient-to-r from-neon-green to-green-600 text-dark-bg font-bold py-5 rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-neon-green/30 border-2 border-neon-green/50"
             >
-              Defendant
-              <ChevronRight className="w-5 h-5" />
-            </button>
+              <span className="text-lg">Defendant</span>
+              {voting && swipeDirection === 'right' ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <ChevronRight className="w-6 h-6" />
+              )}
+            </motion.button>
           </div>
           <p className="text-center text-white/40 text-xs mt-2">
             Swipe or tap to vote • 5 $LOVE stake • Earn 2 $LOVE

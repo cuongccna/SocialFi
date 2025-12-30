@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Coins, Zap } from 'lucide-react';
 import type { User } from '../types';
+import { getAvatarUrl } from '../utils/helpers';
 
 interface HomePageProps {
   user: User | null;
@@ -14,8 +15,6 @@ export default function HomePage({ user }: HomePageProps) {
     walletRank: user?.wallet_rank ?? 'SHRIMP',
   };
 
-  // Get first letter for avatar
-  const avatarLetter = user?.display_name?.[0] || user?.username?.[0] || '?';
   const displayName = user?.display_name || 'Anon';
   const username = user?.username;
 
@@ -34,9 +33,11 @@ export default function HomePage({ user }: HomePageProps) {
       {/* Welcome Card */}
       <div className="card p-6">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-neon-blue flex items-center justify-center text-2xl font-bold text-dark">
-            {avatarLetter}
-          </div>
+          <img
+            src={user ? getAvatarUrl(user) : 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=anonymous&backgroundColor=transparent'}
+            alt={displayName}
+            className="w-16 h-16 rounded-full border-2 border-primary/50 object-cover"
+          />
           <div className="flex-1">
             <h2 className="text-xl font-semibold">
               gm, {displayName} 👋

@@ -94,6 +94,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             balance_love: 500,
             is_active: true,
             last_active_at: new Date().toISOString(),
+            boosted_until: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };

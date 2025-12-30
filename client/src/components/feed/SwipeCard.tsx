@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { MapPin, TrendingUp, TrendingDown } from 'lucide-react';
 import { haptic } from '../../utils/telegram';
+import { getAvatarUrl } from '../../utils/helpers';
 import type { FeedUser } from '../../types';
 
 interface SwipeCardProps {
@@ -65,7 +66,7 @@ export default function SwipeCard({ user, onSwipe }: SwipeCardProps) {
         {/* Background Image */}
         <div className="absolute inset-0">
           <img
-            src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`}
+            src={getAvatarUrl(user)}
             alt={user.display_name}
             className="w-full h-full object-cover opacity-30"
           />

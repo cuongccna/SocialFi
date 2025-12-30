@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, TrendingUp, Loader2, RefreshCw, Sparkles, Flame } from 'lucide-react';
+import { Heart, MessageCircle, TrendingUp, Loader2, RefreshCw, Sparkles, Flame, TrendingDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getMatches, formatTimeAgo, mintContract, type Match } from '../services/matches.service';
+import { fudUser, getFudStatus, type FudStatus } from '../services/profile.service';
 import { haptic } from '../utils/telegram';
 
 export default function MatchesPage() {
@@ -8,6 +10,10 @@ export default function MatchesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mintingId, setMintingId] = useState<string | null>(null);
+  const [fudingId, setFudingId] = useState<string | null>(null);
+  const [fudStatuses, setFudStatuses] = useState<Record<string, FudStatus>>({});
+  const [showFudConfirm, setShowFudConfirm] = useState<string | null>(null);
+  const [fudMessage, setFudMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadMatches();
@@ -19,6 +25,18 @@ export default function MatchesPage() {
       setError(null);
       const { matches } = await getMatches();
       setMatches(matches);
+      
+      // Load FUD status for each match
+      const statuses: Record<string, FudStatus> = {};
+      for (const match of matches) {
+        try {
+          const status = await getFudStatus(match.partner_id);
+          statuses[match.partner_id] = status;
+        } catch {
+          // Ignore errors, user can still try to FUD
+        }
+      }
+      setFudStatuses(statuses);
     } catch (err) {
       console.error('Failed to load matches:', err);
       setError('Failed to load matches. Please try again.');
@@ -44,6 +62,43 @@ export default function MatchesPage() {
       haptic.notification('error');
     } finally {
       setMintingId(null);
+    }
+  };
+
+  // Handle FUD user
+  const handleFud = async (partnerId: string, partnerName: string) => {
+    try {
+      setFudingId(partnerId);
+      setShowFudConfirm(null);
+      haptic.impact('heavy');
+      
+      const result = await fudUser(partnerId);
+      
+      haptic.notification('success');
+      setFudMessage({ 
+        type: 'success', 
+        text: result.message || `📉 ${partnerName}'s price dumped -15%!` 
+      });
+      
+      // Update FUD status
+      setFudStatuses(prev => ({
+        ...prev,
+        [partnerId]: { success: true, can_fud: false, cooldown_remaining_hours: 24 }
+      }));
+      
+      // Reload matches
+      await loadMatches();
+      
+      setTimeout(() => setFudMessage(null), 5000);
+    } catch (err: any) {
+      haptic.notification('error');
+      setFudMessage({ 
+        type: 'error', 
+        text: err.response?.data?.message || 'Failed to FUD user' 
+      });
+      setTimeout(() => setFudMessage(null), 5000);
+    } finally {
+      setFudingId(null);
     }
   };
 
@@ -104,6 +159,72 @@ export default function MatchesPage() {
 
   return (
     <div className="h-full overflow-y-auto pb-20">
+      {/* FUD Message Toast */}
+      <AnimatePresence>
+        {fudMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className={`fixed top-4 left-4 right-4 z-50 p-4 rounded-xl text-center font-medium ${
+              fudMessage.type === 'success' 
+                ? 'bg-neon-red/90 text-white' 
+                : 'bg-white/90 text-neon-red'
+            }`}
+          >
+            {fudMessage.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* FUD Confirmation Modal */}
+      <AnimatePresence>
+        {showFudConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+            onClick={() => setShowFudConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-dark-100 rounded-2xl p-6 max-w-sm w-full border border-neon-red/30"
+            >
+              <div className="text-center mb-4">
+                <div className="text-5xl mb-3">⚠️</div>
+                <h3 className="text-xl font-bold text-neon-red">Confirm FUD</h3>
+                <p className="text-white/70 mt-2 text-sm">
+                  This will dump their Market Price by <span className="text-neon-red font-bold">-15%</span>. 
+                  You can only FUD once per 24 hours per match.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowFudConfirm(null)}
+                  className="flex-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const match = matches.find(m => m.partner_id === showFudConfirm);
+                    if (match) handleFud(match.partner_id, match.display_name);
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-neon-red to-red-600 text-white font-bold flex items-center justify-center gap-2"
+                >
+                  <TrendingDown className="w-4 h-4" />
+                  FUD Them!
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="p-4 bg-dark-100/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex items-center justify-between">
@@ -179,7 +300,7 @@ export default function MatchesPage() {
               </a>
             </div>
 
-            {/* Combined Market Cap & Mint Button */}
+            {/* Combined Market Cap & Action Buttons */}
             <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between">
               <div className="text-sm">
                 <span className="text-white/60">Combined Cap: </span>
@@ -188,31 +309,64 @@ export default function MatchesPage() {
                 </span>
               </div>
               
-              {match.status === 'MATCHED' && (
-                <button
-                  onClick={() => handleMintContract(match.relationship_id)}
-                  disabled={mintingId === match.relationship_id}
-                  className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
-                >
-                  {mintingId === match.relationship_id ? (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Minting...
-                    </>
-                  ) : (
-                    <>
-                      <Flame className="w-3 h-3" />
-                      Mint Contract 💍
-                    </>
-                  )}
-                </button>
-              )}
-              
-              {match.status === 'MINTED_CONTRACT' && match.contract_address && (
-                <div className="text-xs text-neon-purple/80 truncate max-w-[120px]">
-                  {match.contract_address.slice(0, 8)}...
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {/* FUD Button */}
+                {(() => {
+                  const fudStatus = fudStatuses[match.partner_id];
+                  const canFud = !fudStatus || fudStatus.can_fud !== false;
+                  const isFuding = fudingId === match.partner_id;
+                  
+                  return (
+                    <button
+                      onClick={() => {
+                        haptic.impact('light');
+                        setShowFudConfirm(match.partner_id);
+                      }}
+                      disabled={!canFud || isFuding}
+                      className={`text-xs py-1.5 px-3 rounded-lg flex items-center gap-1 transition-all ${
+                        canFud 
+                          ? 'bg-neon-red/20 text-neon-red hover:bg-neon-red/30 border border-neon-red/30' 
+                          : 'bg-white/5 text-white/30 cursor-not-allowed'
+                      }`}
+                      title={canFud ? 'FUD their price -15%' : `Cooldown: ${fudStatus?.cooldown_remaining_hours || 24}h`}
+                    >
+                      {isFuding ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3" />
+                      )}
+                      FUD
+                    </button>
+                  );
+                })()}
+
+                {/* Mint Contract Button */}
+                {match.status === 'MATCHED' && (
+                  <button
+                    onClick={() => handleMintContract(match.relationship_id)}
+                    disabled={mintingId === match.relationship_id}
+                    className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
+                  >
+                    {mintingId === match.relationship_id ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Minting...
+                      </>
+                    ) : (
+                      <>
+                        <Flame className="w-3 h-3" />
+                        Mint 💍
+                      </>
+                    )}
+                  </button>
+                )}
+                
+                {match.status === 'MINTED_CONTRACT' && match.contract_address && (
+                  <div className="text-xs text-neon-purple/80 truncate max-w-[80px]">
+                    {match.contract_address.slice(0, 8)}...
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}

@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, TrendingUp, X, Sparkles } from 'lucide-react';
 import { haptic } from '../utils/telegram';
+import { getAvatarUrl } from '../utils/helpers';
 import type { FeedUser, SwipeResult } from '../types';
 
 interface MatchPopupProps {
@@ -133,7 +134,7 @@ export default function MatchPopup({
                 className="relative"
               >
                 <img
-                  src={currentUser?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=me'}
+                  src={currentUser ? getAvatarUrl(currentUser) : 'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=me&backgroundColor=transparent'}
                   alt="You"
                   className="w-24 h-24 rounded-full border-4 border-primary object-cover"
                 />
@@ -165,7 +166,7 @@ export default function MatchPopup({
                 className="relative"
               >
                 <img
-                  src={matchedUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${matchedUser.id}`}
+                  src={getAvatarUrl(matchedUser)}
                   alt={matchedUser.display_name}
                   className="w-24 h-24 rounded-full border-4 border-neon-purple object-cover"
                 />

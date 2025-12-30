@@ -111,6 +111,14 @@ async function sendMessage(req, res, next) {
 
     const message = result.rows[0];
 
+    // Joint Venture: Increment joint_balance by 0.1 $LOVE per message
+    await pool.query(`
+      UPDATE relationships 
+      SET joint_balance = COALESCE(joint_balance, 0) + 0.1,
+          updated_at = NOW()
+      WHERE id = $1
+    `, [matchId]);
+
     // Get sender info
     const sender = await pool.query(
       'SELECT display_name, avatar_url, telegram_id FROM users WHERE id = $1',
@@ -189,7 +197,9 @@ async function getConversations(req, res, next) {
           WHERE relationship_id = r.id 
             AND sender_id != $1 
             AND is_read = FALSE
-        ) as unread_count
+        ) as unread_count,
+        -- Joint Venture balance
+        COALESCE(r.joint_balance, 0) as joint_balance
       FROM relationships r
       JOIN users u_a ON r.user_a = u_a.id
       JOIN users u_b ON r.user_b = u_b.id

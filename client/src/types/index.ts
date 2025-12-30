@@ -15,6 +15,7 @@ export interface User {
   balance_love: number;
   is_active: boolean;
   last_active_at: string | null;
+  boosted_until: string | null;
   created_at: string;
   updated_at: string;
 }

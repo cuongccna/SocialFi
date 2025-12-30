@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users, Camera, BadgeCheck, Sparkles } from 'lucide-react';
+import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users, Camera, BadgeCheck, Sparkles, Rocket, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { getUserStats, formatNumber, type UserStats } from '../services/profile.service';
+import { getUserStats, formatNumber, boostProfile, type UserStats } from '../services/profile.service';
 import { getMatches } from '../services/matches.service';
 import { haptic } from '../utils/telegram';
 import { getAvatarUrl, isDefaultAvatar, avatarRingClass } from '../utils/helpers';
 
 export default function ProfilePage() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, refreshUser } = useAuth();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [matchCount, setMatchCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showUploadTooltip, setShowUploadTooltip] = useState(false);
+  const [isBoosting, setIsBoosting] = useState(false);
+  const [boostMessage, setBoostMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -47,6 +49,46 @@ export default function ProfilePage() {
         return { emoji: '🦐', class: 'badge-shrimp', label: 'Shrimp', color: 'text-pink-400' };
     }
   };
+
+  // Handle boost profile
+  const handleBoost = async () => {
+    if (isBoosting) return;
+    
+    try {
+      setIsBoosting(true);
+      setBoostMessage(null);
+      haptic.impact('heavy');
+      
+      const result = await boostProfile();
+      
+      haptic.notification('success');
+      setBoostMessage({ type: 'success', text: result.message || '🚀 Profile boosted! +10% price pump!' });
+      
+      // Refresh user data
+      if (refreshUser) {
+        await refreshUser();
+      }
+      await loadStats();
+      
+      // Auto-hide message after 5 seconds
+      setTimeout(() => setBoostMessage(null), 5000);
+    } catch (err: any) {
+      haptic.notification('error');
+      setBoostMessage({ 
+        type: 'error', 
+        text: err.response?.data?.message || 'Failed to boost profile' 
+      });
+      setTimeout(() => setBoostMessage(null), 5000);
+    } finally {
+      setIsBoosting(false);
+    }
+  };
+
+  // Check if user is currently boosted
+  const isBoosted = user?.boosted_until && new Date(user.boosted_until) > new Date();
+  const boostTimeRemaining = isBoosted 
+    ? Math.ceil((new Date(user!.boosted_until!).getTime() - Date.now()) / (1000 * 60))
+    : 0;
 
   // Loading state
   if (authLoading || !user) {
@@ -219,6 +261,60 @@ export default function ProfilePage() {
               <div className="text-xs text-white/50 mt-1">Connections</div>
             </div>
           </div>
+
+          {/* Boost Message */}
+          <AnimatePresence>
+            {boostMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className={`mt-4 p-3 rounded-xl text-center ${
+                  boostMessage.type === 'success' 
+                    ? 'bg-neon-green/20 text-neon-green' 
+                    : 'bg-neon-red/20 text-neon-red'
+                }`}
+              >
+                {boostMessage.text}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Pump Profile Button */}
+          <motion.button
+            onClick={handleBoost}
+            disabled={isBoosting || !!isBoosted}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className={`mt-4 w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
+              isBoosted 
+                ? 'bg-gradient-to-r from-neon-purple/30 to-primary/30 text-white/60 cursor-not-allowed border border-neon-purple/30'
+                : 'bg-gradient-to-r from-primary to-neon-green text-dark shadow-lg shadow-primary/30 hover:shadow-primary/50'
+            }`}
+          >
+            {isBoosting ? (
+              <>
+                <Loader2 className="w-6 h-6 animate-spin" />
+                Pumping...
+              </>
+            ) : isBoosted ? (
+              <>
+                <Zap className="w-6 h-6" />
+                Boosted! {boostTimeRemaining}m left
+              </>
+            ) : (
+              <>
+                <Rocket className="w-6 h-6" />
+                🚀 PUMP PROFILE
+              </>
+            )}
+          </motion.button>
+          
+          {!isBoosted && (
+            <p className="text-center text-xs text-white/50 mt-2">
+              500 $LOVE • +10% Price Pump • 30 min visibility boost
+            </p>
+          )}
         </div>
 
         {/* Activity Stats */}
