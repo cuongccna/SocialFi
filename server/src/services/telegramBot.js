@@ -10,7 +10,7 @@ const { Bot, InlineKeyboard } = require('grammy');
 let bot = null;
 
 // Config
-const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/CryptoCrushBot/app';
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://magiamhot.io.vn';
 const COMMUNITY_URL = process.env.COMMUNITY_URL || 'https://t.me/CryptoCrushCommunity';
 const WELCOME_IMAGE = process.env.WELCOME_IMAGE || 'https://i.imgur.com/5CmQjNr.gif'; // Placeholder animation
 
