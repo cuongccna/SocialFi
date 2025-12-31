@@ -229,7 +229,83 @@ async function getFeed(req, res, next) {
     }
     
     // =========================================
-    // STEP 4: ENRICH with chart data
+    // STEP 4: FULL RESURRECTION (LIKE swipes without match)
+    // If STILL empty, resurrect old LIKE swipes that didn't match
+    // This is the last resort - give users another chance!
+    // =========================================
+    if (users.length < MIN_FEED_SIZE) {
+      console.log(`[Feed] Step 4: Full Resurrection - LIKE swipes without match (total=${users.length})`);
+      
+      const remaining = limit - users.length;
+      const excludeIds = users.map(u => u.id);
+      
+      // Find users who were LIKED but didn't match (one-way likes)
+      const findLikedQuery = `
+        SELECT s.target_id
+        FROM swipes s
+        INNER JOIN users u ON u.id = s.target_id
+        WHERE s.actor_id = $1
+          AND s.action = 'LIKE'
+          AND u.is_active = TRUE
+          AND s.target_id != ALL($2::uuid[])
+          -- ONLY resurrect if NOT already matched
+          AND NOT EXISTS (
+            SELECT 1 FROM relationships r
+            WHERE (r.user_a = $1 AND r.user_b = s.target_id)
+               OR (r.user_b = $1 AND r.user_a = s.target_id)
+          )
+        ORDER BY s.created_at ASC
+        LIMIT $3;
+      `;
+      
+      const likedResult = await query(findLikedQuery, [userId, excludeIds, remaining]);
+      const likedUserIds = likedResult.rows.map(r => r.target_id);
+      
+      if (likedUserIds.length > 0) {
+        console.log(`[Feed] Resurrecting ${likedUserIds.length} LIKED (unmatched) users...`);
+        
+        // DELETE their LIKE swipes (give another chance to match)
+        await query(`
+          DELETE FROM swipes 
+          WHERE actor_id = $1 
+            AND action = 'LIKE'
+            AND target_id = ANY($2::uuid[])
+            -- Double check: don't delete if matched
+            AND NOT EXISTS (
+              SELECT 1 FROM relationships r
+              WHERE (r.user_a = $1 AND r.user_b = target_id)
+                 OR (r.user_b = $1 AND r.user_a = target_id)
+            )
+        `, [userId, likedUserIds]);
+        
+        resurrectedCount += likedUserIds.length;
+        
+        // Fetch the resurrected users
+        const resurrectedQuery = `
+          SELECT 
+            ${getUserSelectFields()},
+            CASE 
+              WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
+              THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
+              ELSE 999.0
+            END AS distance_km,
+            'resurrected_like' AS source
+          FROM users u
+          WHERE u.id = ANY($3::uuid[])
+            AND u.is_active = TRUE
+          ORDER BY u.market_price DESC;
+        `;
+        
+        const resurrectedResult = await query(resurrectedQuery, [lat, lng, likedUserIds]);
+        users = [...users, ...resurrectedResult.rows];
+        sources.resurrected += resurrectedResult.rows.length;
+        
+        console.log(`[Feed] Step 4 Result: ${resurrectedResult.rows.length} LIKED users resurrected, total=${users.length}`);
+      }
+    }
+    
+    // =========================================
+    // STEP 5: ENRICH with chart data
     // =========================================
     if (users.length > 0) {
       const userIds = users.map(u => u.id);
