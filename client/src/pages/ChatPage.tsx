@@ -71,7 +71,6 @@ export default function ChatPage() {
 
   const { 
     isConnected, 
-    sendMessage: socketSendMessage, 
     startTyping, 
     stopTyping,
     markAsRead 
@@ -158,24 +157,23 @@ export default function ChatPage() {
     setMessages(prev => [...prev, optimisticMessage]);
 
     try {
-      // Use socket if connected, otherwise fall back to REST API
-      if (isConnected) {
-        socketSendMessage(content, 'TEXT');
-        // Animate joint balance increment (socket will confirm with update_balance)
-        setJointBalance(prev => prev + 0.1);
-        setShowBalanceBump(true);
-        setTimeout(() => setShowBalanceBump(false), 500);
+      // Always use REST API to ensure message is saved to DB
+      // Socket handles real-time delivery to other user
+      const { message, jointBalance, rewardAmount } = await sendMessage(selectedConversation.relationship_id, content);
+      
+      // Replace optimistic message with real one from server
+      setMessages(prev => prev.map(m => 
+        m.id === optimisticMessage.id ? message : m
+      ));
+      
+      // Update joint balance from server (more accurate than local calculation)
+      if (jointBalance !== undefined) {
+        setJointBalance(jointBalance);
       } else {
-        const message = await sendMessage(selectedConversation.relationship_id, content);
-        // Replace optimistic message with real one
-        setMessages(prev => prev.map(m => 
-          m.id === optimisticMessage.id ? message : m
-        ));
-        // Animate joint balance increment
         setJointBalance(prev => prev + 0.1);
-        setShowBalanceBump(true);
-        setTimeout(() => setShowBalanceBump(false), 500);
       }
+      setShowBalanceBump(true);
+      setTimeout(() => setShowBalanceBump(false), 500);
       
       // Trigger floating +0.1 $LOVE animation
       const rewardId = Date.now();
@@ -185,7 +183,7 @@ export default function ChatPage() {
           id: rewardId, 
           x: buttonRect.left + buttonRect.width / 2,
           y: buttonRect.top,
-          amount: 0.1
+          amount: rewardAmount || 0.1
         }]);
         setTimeout(() => {
           setFloatingRewards(prev => prev.filter(r => r.id !== rewardId));
@@ -227,23 +225,25 @@ export default function ChatPage() {
     setMessages(prev => [...prev, optimisticMessage]);
 
     try {
-      // Send via socket with STICKER type
-      if (isConnected) {
-        socketSendMessage(sticker.url, 'STICKER');
-        // Stickers give more reward!
-        setJointBalance(prev => prev + STICKER_REWARD);
-        setShowBalanceBump(true);
-        setTimeout(() => setShowBalanceBump(false), 500);
+      // Always use REST API to ensure message is saved to DB
+      // Socket is used for real-time delivery to other user
+      console.log('📨 Sending sticker via REST API:', sticker.url);
+      const { message, jointBalance, rewardAmount } = await sendMessage(selectedConversation.relationship_id, sticker.url, 'STICKER');
+      console.log('✅ Sticker saved:', message);
+      
+      // Replace optimistic message with real one from server
+      setMessages(prev => prev.map(m => 
+        m.id === optimisticMessage.id ? message : m
+      ));
+      
+      // Update joint balance from server (more accurate than local calculation)
+      if (jointBalance !== undefined) {
+        setJointBalance(jointBalance);
       } else {
-        // Fallback to REST API
-        const message = await sendMessage(selectedConversation.relationship_id, sticker.url, 'STICKER');
-        setMessages(prev => prev.map(m => 
-          m.id === optimisticMessage.id ? message : m
-        ));
         setJointBalance(prev => prev + STICKER_REWARD);
-        setShowBalanceBump(true);
-        setTimeout(() => setShowBalanceBump(false), 500);
       }
+      setShowBalanceBump(true);
+      setTimeout(() => setShowBalanceBump(false), 500);
 
       // Trigger floating reward animation (stickers give more!)
       const rewardId = Date.now();
@@ -253,7 +253,7 @@ export default function ChatPage() {
           id: rewardId, 
           x: buttonRect.left + buttonRect.width / 2,
           y: buttonRect.top,
-          amount: STICKER_REWARD
+          amount: rewardAmount || STICKER_REWARD
         }]);
         setTimeout(() => {
           setFloatingRewards(prev => prev.filter(r => r.id !== rewardId));

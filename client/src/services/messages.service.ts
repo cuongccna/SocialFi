@@ -45,6 +45,8 @@ interface ConversationsResponse {
 interface SendMessageResponse {
   success: boolean;
   message: Message;
+  joint_balance?: number;
+  reward_amount?: number;
 }
 
 interface UnreadCountResponse {
@@ -71,17 +73,22 @@ export async function getMessages(
 
 /**
  * Send a message
+ * Returns message and updated joint balance
  */
 export async function sendMessage(
   matchId: string, 
   content: string, 
   messageType: MessageType = 'TEXT'
-): Promise<Message> {
+): Promise<{ message: Message; jointBalance?: number; rewardAmount?: number }> {
   const response = await api.post<SendMessageResponse>(`/messages/${matchId}`, { 
     content,
     message_type: messageType,
   });
-  return response.message;
+  return {
+    message: response.message,
+    jointBalance: response.joint_balance,
+    rewardAmount: response.reward_amount,
+  };
 }
 
 /**

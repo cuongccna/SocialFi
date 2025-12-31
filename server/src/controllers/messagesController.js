@@ -118,12 +118,15 @@ async function sendMessage(req, res, next) {
 
     // Joint Venture: Stickers give +0.5 $LOVE, text messages give +0.1 $LOVE
     const rewardAmount = msgType === 'STICKER' ? 0.5 : 0.1;
-    await pool.query(`
+    const balanceResult = await pool.query(`
       UPDATE relationships 
       SET joint_balance = COALESCE(joint_balance, 0) + $2,
           updated_at = NOW()
       WHERE id = $1
+      RETURNING joint_balance
     `, [matchId, rewardAmount]);
+    
+    const newJointBalance = parseFloat(balanceResult.rows[0]?.joint_balance) || 0;
 
     // Get sender info
     const sender = await pool.query(
@@ -157,6 +160,8 @@ async function sendMessage(req, res, next) {
         sender_name: sender.rows[0].display_name,
         sender_avatar: sender.rows[0].avatar_url,
       },
+      joint_balance: newJointBalance,
+      reward_amount: rewardAmount,
     });
 
   } catch (err) {
