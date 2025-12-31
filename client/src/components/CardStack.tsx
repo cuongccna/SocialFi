@@ -397,6 +397,9 @@ function SwipeCard({
   const [exitDirection, setExitDirection] = useState<'left' | 'right' | null>(null);
   const [mysteryRevealed, setMysteryRevealed] = useState(false);
   
+  // Prevent duplicate swipe calls
+  const hasSwipedRef = useRef(false);
+  
   // Live Price Ticker state
   const [livePrice, setLivePrice] = useState(profile.market_price);
   const [priceDirection, setPriceDirection] = useState<'up' | 'down' | 'neutral'>('neutral');
@@ -409,7 +412,10 @@ function SwipeCard({
 
   // Handle button swipe trigger
   useEffect(() => {
-    if (buttonSwipeDirection && isTop && !exitDirection) {
+    if (buttonSwipeDirection && isTop && !exitDirection && !hasSwipedRef.current) {
+      // Mark as swiped immediately to prevent duplicate calls
+      hasSwipedRef.current = true;
+      
       // Trigger swipe animation from button
       setExitDirection(buttonSwipeDirection);
       
@@ -509,11 +515,17 @@ function SwipeCard({
   // Handle drag end
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      // Prevent duplicate swipe calls
+      if (hasSwipedRef.current) return;
+      
       const threshold = 100;
       const velocity = info.velocity.x;
       const offset = info.offset.x;
 
       if (offset > threshold || velocity > 500) {
+        // Mark as swiped immediately
+        hasSwipedRef.current = true;
+        
         // Swipe RIGHT -> LONG
         setExitDirection('right');
         
@@ -540,6 +552,9 @@ function SwipeCard({
         
         setTimeout(() => onSwipe('right', buildSwipeInfo()), 100);
       } else if (offset < -threshold || velocity < -500) {
+        // Mark as swiped immediately
+        hasSwipedRef.current = true;
+        
         // Swipe LEFT -> SHORT
         setExitDirection('left');
         haptic.notification('warning');
