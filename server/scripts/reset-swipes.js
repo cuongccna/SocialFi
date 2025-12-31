@@ -5,6 +5,9 @@
  * Usage: node scripts/reset-swipes.js <telegram_id>
  */
 
+// Load environment variables
+require('dotenv').config();
+
 const { pool } = require('../src/config/db');
 
 async function resetSwipes() {
