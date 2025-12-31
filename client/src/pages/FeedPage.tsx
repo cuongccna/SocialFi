@@ -152,6 +152,9 @@ export default function FeedPage() {
     setSwipeCount(prev => prev + 1);
     setIsProcessing(true);
     
+    // Remove user from local state immediately to prevent duplicate swipes
+    setUsers(prev => prev.filter(u => u.id !== profile.id));
+    
     try {
       // Call API to record swipe with mystery/vip flags
       const result = direction === 'right' 
@@ -272,16 +275,17 @@ export default function FeedPage() {
       const feedUsers = await getFeed(
         user?.latitude || undefined,
         user?.longitude || undefined,
-        10, // radius in km
+        searchRadius, // Use current search radius
         20  // limit
       );
 
       if (feedUsers.length > 0) {
         // Append new users to existing list
         setUsers(prev => {
-          // Filter out duplicates
+          // Filter out duplicates (already in current list)
           const existingIds = new Set(prev.map(u => u.id));
           const newUsers = feedUsers.filter(u => !existingIds.has(u.id));
+          console.log(`📥 Got ${feedUsers.length} users, ${newUsers.length} new`);
           return [...prev, ...newUsers];
         });
       }
@@ -289,7 +293,7 @@ export default function FeedPage() {
       console.error('Failed to prefetch:', err);
       // Don't show error - just log it
     }
-  }, [user]);
+  }, [user, searchRadius]);
 
   // Loading state
   if (isLoading && users.length === 0) {
