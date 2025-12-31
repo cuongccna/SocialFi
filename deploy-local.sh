@@ -511,14 +511,15 @@ server {
         proxy_buffering off;
     }
     
-    # Public static files (backend)
-    location /public/ {
+    # Public static files (backend) - ^~ to prioritize over regex
+    location ^~ /public/ {
         proxy_pass http://cryptocrush_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         expires 1y;
         add_header Cache-Control "public, immutable";
+        add_header Access-Control-Allow-Origin *;
     }
     
     location /tonconnect-manifest.json {
@@ -603,14 +604,15 @@ server {
         proxy_buffering off;
     }
     
-    # Public static files (backend)
-    location /public/ {
+    # Public static files (backend) - ^~ to prioritize over regex
+    location ^~ /public/ {
         proxy_pass http://cryptocrush_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         expires 1y;
         add_header Cache-Control "public, immutable";
+        add_header Access-Control-Allow-Origin *;
     }
     
     location /tonconnect-manifest.json {
