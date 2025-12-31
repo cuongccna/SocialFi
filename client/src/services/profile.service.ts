@@ -4,6 +4,7 @@
  */
 
 import { api } from '../api/axiosClient';
+import { getInitData } from '../utils/telegram';
 
 export interface UserStats {
   total_likes_received: number;
@@ -172,11 +173,14 @@ export async function uploadAvatar(file: File): Promise<UploadAvatarResult> {
   const formData = new FormData();
   formData.append('avatar', file);
   
+  // Get initData the same way axios does
+  const initData = getInitData();
+  
   // Use fetch directly for FormData (axios sometimes has issues with multipart)
   const response = await fetch('/api/users/avatar', {
     method: 'POST',
     headers: {
-      'Authorization': localStorage.getItem('initData') || '',
+      'Authorization': initData || '',
     },
     body: formData,
   });
