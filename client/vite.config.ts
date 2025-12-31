@@ -29,6 +29,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/public': {
+        target: process.env.VITE_API_TARGET || 'http://localhost:3005',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

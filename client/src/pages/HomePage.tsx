@@ -18,6 +18,15 @@ export default function HomePage({ user }: HomePageProps) {
   const displayName = user?.display_name || 'Anon';
   const username = user?.username;
 
+  // Dynamic greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'gm'; // Good morning
+    if (hour >= 12 && hour < 17) return 'ga'; // Good afternoon
+    if (hour >= 17 && hour < 21) return 'ge'; // Good evening
+    return 'gn'; // Good night
+  };
+
   return (
     <div className="h-full overflow-y-auto p-4 space-y-6">
       {/* Header */}
@@ -40,7 +49,7 @@ export default function HomePage({ user }: HomePageProps) {
           />
           <div className="flex-1">
             <h2 className="text-xl font-semibold">
-              gm, {displayName} 👋
+              {getGreeting()}, {displayName} 👋
             </h2>
             <p className="text-white/60 text-sm">
               {username ? `@${username}` : 'Welcome to the market'}

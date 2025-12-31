@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const { authMiddleware } = require('../middlewares');
 const {
@@ -13,7 +14,24 @@ const {
   getUserById,
   boostProfile,
   getBoostStatus,
+  uploadAvatar,
 } = require('../controllers/usersController');
+
+// Configure multer for memory storage (we'll handle file saving manually)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Only allow images
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+});
 
 // All routes require authentication
 router.use(authMiddleware);
@@ -26,6 +44,9 @@ router.get('/me', getCurrentUser);
 
 // PUT /users/me - Update current user's profile
 router.put('/me', updateProfile);
+
+// POST /users/avatar - Upload avatar image
+router.post('/avatar', upload.single('avatar'), uploadAvatar);
 
 // GET /users/boost-status - Check boost status
 router.get('/boost-status', getBoostStatus);

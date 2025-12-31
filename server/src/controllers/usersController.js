@@ -5,11 +5,17 @@
 
 const { pool, query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
+const path = require('path');
+const fs = require('fs');
 
 // Boost Constants
 const BOOST_COST_LOVE = 500;        // Cost in $LOVE tokens
 const BOOST_DURATION_MINUTES = 30;  // Boost duration
 const BOOST_PRICE_INCREASE = 10;    // 10% price pump
+
+// Avatar upload constants - Use root public folder (same as certificates)
+const AVATAR_UPLOAD_DIR = path.join(__dirname, '../../../public/avatars');
+const VERIFIED_BADGE_BONUS = 10;    // 10% price boost for verified users
 
 /**
  * GET /users/stats
@@ -330,4 +336,90 @@ module.exports = {
   getUserById,
   boostProfile,
   getBoostStatus,
+  uploadAvatar,
 };
+
+/**
+ * POST /users/avatar
+ * Upload user avatar image
+ * Gives +10% market price boost for verified (real photo) users
+ */
+async function uploadAvatar(req, res, next) {
+  const client = await getClient();
+  
+  try {
+    const userId = req.user.id;
+    
+    if (!req.file) {
+      throw new ApiError(400, 'No file uploaded');
+    }
+    
+    // Ensure directory exists
+    if (!fs.existsSync(AVATAR_UPLOAD_DIR)) {
+      fs.mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
+    }
+    
+    // Generate unique filename
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const filename = `avatar_${userId}_${Date.now()}${ext}`;
+    const filepath = path.join(AVATAR_UPLOAD_DIR, filename);
+    
+    // Write file
+    fs.writeFileSync(filepath, req.file.buffer);
+    
+    // Create URL path (relative to public folder)
+    const avatarUrl = `/public/avatars/${filename}`;
+    
+    await client.query('BEGIN');
+    
+    // Check if this is user's first real photo upload
+    const userCheck = await client.query(
+      'SELECT avatar_url, market_price FROM users WHERE id = $1 FOR UPDATE',
+      [userId]
+    );
+    
+    const currentUser = userCheck.rows[0];
+    const isFirstRealPhoto = !currentUser.avatar_url || 
+                              currentUser.avatar_url.includes('dicebear') || 
+                              currentUser.avatar_url.includes('api.dicebear');
+    
+    let newPrice = parseFloat(currentUser.market_price);
+    let bonusApplied = false;
+    
+    // Apply 10% bonus for first real photo (verified badge)
+    if (isFirstRealPhoto) {
+      newPrice = newPrice * (1 + VERIFIED_BADGE_BONUS / 100);
+      bonusApplied = true;
+    }
+    
+    // Update user with new avatar
+    const result = await client.query(`
+      UPDATE users
+      SET 
+        avatar_url = $2,
+        market_price = $3,
+        price_change_24h = price_change_24h + $4,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, display_name, avatar_url, market_price, price_change_24h
+    `, [userId, avatarUrl, newPrice, bonusApplied ? VERIFIED_BADGE_BONUS : 0]);
+    
+    await client.query('COMMIT');
+    
+    res.json({
+      success: true,
+      message: bonusApplied 
+        ? `🎉 Photo uploaded! You're now verified with +${VERIFIED_BADGE_BONUS}% Market Cap boost!`
+        : 'Photo updated successfully!',
+      user: result.rows[0],
+      bonus_applied: bonusApplied,
+      bonus_percent: bonusApplied ? VERIFIED_BADGE_BONUS : 0,
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}

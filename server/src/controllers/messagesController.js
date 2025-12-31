@@ -80,13 +80,18 @@ async function sendMessage(req, res, next) {
   try {
     const userId = req.user.id;
     const { matchId } = req.params;
-    const { content } = req.body;
+    const { content, message_type = 'TEXT' } = req.body;
 
     if (!content || content.trim().length === 0) {
       throw new ApiError(400, 'Message content is required');
     }
 
-    if (content.length > 1000) {
+    // Validate message type
+    const validTypes = ['TEXT', 'STICKER', 'IMAGE'];
+    const msgType = validTypes.includes(message_type) ? message_type : 'TEXT';
+
+    // For text messages, check length limit
+    if (msgType === 'TEXT' && content.length > 1000) {
       throw new ApiError(400, 'Message too long (max 1000 characters)');
     }
 
@@ -102,22 +107,23 @@ async function sendMessage(req, res, next) {
       throw new ApiError(403, 'Not authorized to send messages here');
     }
 
-    // Insert message
+    // Insert message with type
     const result = await pool.query(`
-      INSERT INTO messages (relationship_id, sender_id, content)
-      VALUES ($1, $2, $3)
+      INSERT INTO messages (relationship_id, sender_id, content, type)
+      VALUES ($1, $2, $3, $4)
       RETURNING *
-    `, [matchId, userId, content.trim()]);
+    `, [matchId, userId, content.trim(), msgType]);
 
     const message = result.rows[0];
 
-    // Joint Venture: Increment joint_balance by 0.1 $LOVE per message
+    // Joint Venture: Stickers give +0.5 $LOVE, text messages give +0.1 $LOVE
+    const rewardAmount = msgType === 'STICKER' ? 0.5 : 0.1;
     await pool.query(`
       UPDATE relationships 
-      SET joint_balance = COALESCE(joint_balance, 0) + 0.1,
+      SET joint_balance = COALESCE(joint_balance, 0) + $2,
           updated_at = NOW()
       WHERE id = $1
-    `, [matchId]);
+    `, [matchId, rewardAmount]);
 
     // Get sender info
     const sender = await pool.query(

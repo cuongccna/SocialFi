@@ -59,6 +59,16 @@ install_dependencies() {
         log_info "Basic packages already installed"
     fi
     
+    # Install canvas dependencies (required for certificate/NFT image generation)
+    log_info "Checking canvas build dependencies..."
+    if ! dpkg -s libcairo2-dev &> /dev/null; then
+        log_info "Installing canvas build dependencies..."
+        apt-get update
+        apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+    else
+        log_info "Canvas dependencies already installed"
+    fi
+    
     # Install Node.js 20.x if not installed or wrong version
     if ! command -v node &> /dev/null; then
         log_info "Installing Node.js 20.x..."
@@ -206,6 +216,44 @@ seed_vip_profiles() {
 }
 
 # =====================================================
+# 3.6. Create Prediction Markets for Existing Contracts
+# =====================================================
+create_prediction_markets() {
+    log_info "Creating prediction markets for existing minted contracts..."
+    
+    cd "$APP_DIR/server"
+    
+    # Check if script exists
+    if [ -f "scripts/create-markets.js" ]; then
+        node scripts/create-markets.js 2>&1 || {
+            log_warning "Market creation had issues, but continuing..."
+        }
+        log_success "Prediction markets ready!"
+    else
+        log_warning "create-markets.js script not found, skipping..."
+    fi
+}
+
+# =====================================================
+# 3.7. Regenerate Missing NFT Certificates
+# =====================================================
+regenerate_certificates() {
+    log_info "Regenerating missing NFT certificates..."
+    
+    cd "$APP_DIR/server"
+    
+    # Check if script exists
+    if [ -f "scripts/regenerate-certificates.js" ]; then
+        node scripts/regenerate-certificates.js 2>&1 || {
+            log_warning "Certificate regeneration had issues, but continuing..."
+        }
+        log_success "NFT certificates ready!"
+    else
+        log_warning "regenerate-certificates.js script not found, skipping..."
+    fi
+}
+
+# =====================================================
 # 4. Configure Environment (backup existing, create if not exists)
 # =====================================================
 configure_env() {
@@ -299,11 +347,13 @@ build_app() {
     
     CRITICAL_PACKAGES=(
         "@faker-js/faker"    # Market maker bot users (ESM module)
+        "canvas"             # Certificate/NFT image generation
         "cors"               # CORS handling
         "dotenv"             # Environment variables
         "express"            # Web framework
         "grammy"             # Telegram bot
         "helmet"             # Security headers
+        "multer"             # File upload handling
         "node-cron"          # Scheduled tasks (market maker)
         "pg"                 # PostgreSQL client
         "socket.io"          # Real-time WebSocket (Server-side)
@@ -328,6 +378,7 @@ build_app() {
     CRITICAL_CLIENT_PACKAGES=(
         "socket.io-client"   # Real-time WebSocket (Client-side)
         "framer-motion"      # Animations
+        "canvas-confetti"    # Celebration effects for minting NFT
     )
     
     for pkg in "${CRITICAL_CLIENT_PACKAGES[@]}"; do
@@ -347,6 +398,16 @@ build_app() {
     
     # Sync build (preserves existing files, updates changed ones)
     rsync -av --delete dist/ /var/www/html/cryptocrush/ 2>/dev/null || cp -r dist/* /var/www/html/cryptocrush/
+    
+    # Create certificates directory for NFT images
+    log_info "Creating certificates directory..."
+    mkdir -p "$APP_DIR/public/certificates"
+    chmod 755 "$APP_DIR/public/certificates"
+    
+    # Create avatars directory for user profile photos
+    log_info "Creating avatars directory..."
+    mkdir -p "$APP_DIR/public/avatars"
+    chmod 755 "$APP_DIR/public/avatars"
     
     log_success "Application built with all dependencies!"
 }
@@ -780,8 +841,8 @@ show_migrations_info() {
     echo ""
     log_info "=== Database Migrations ==="
     echo ""
-    echo -e "${YELLOW}database/migrations/ (13 files):${NC}"
-    echo "  001_initial_schema.sql          - Core tables (users, swipes)"
+    echo -e "${YELLOW}database/migrations/ (15 files):${NC}"
+    echo "  001_initial_schema.sql          - Core tables (users, swipes, relationships)"
     echo "  001_initial_schema_no_postgis.sql - No PostGIS version"
     echo "  002_add_messages.sql            - Chat/messaging system"
     echo "  003_add_disputes.sql            - Dispute resolution"
@@ -794,6 +855,8 @@ show_migrations_info() {
     echo "  010_add_fud_system.sql          - FUD mechanism"
     echo "  012_add_joint_balance.sql       - Joint Venture (Chat-to-Earn)"
     echo "  013_add_message_type.sql        - Message types (TEXT/IMAGE/STICKER)"
+    echo "  014_add_nft_fields.sql          - NFT certificate fields"
+    echo "  015_create_markets_for_existing.sql - Markets for minted contracts"
     echo ""
     echo -e "${YELLOW}server/migrations/ (1 file):${NC}"
     echo "  011_add_is_vip_column.sql       - VIP user support"
@@ -801,14 +864,26 @@ show_migrations_info() {
     log_info "=== Critical NPM Packages (Server) ==="
     echo ""
     echo "  @faker-js/faker  - Market maker bot users (ESM module)"
+    echo "  canvas           - NFT certificate image generation"
     echo "  cors             - CORS handling"
     echo "  dotenv           - Environment variables"
     echo "  express          - Web framework"
     echo "  grammy           - Telegram bot library"
     echo "  helmet           - Security headers"
+    echo "  multer           - File upload handling (avatars)"
     echo "  node-cron        - Scheduled tasks (market maker)"
     echo "  pg               - PostgreSQL client"
     echo "  socket.io        - Real-time WebSocket (Chat)"
+    echo ""
+    log_info "=== Server Scripts ==="
+    echo ""
+    echo "  scripts/create-markets.js        - Create prediction markets"
+    echo "  scripts/regenerate-certificates.js - Regenerate missing NFT certs"
+    echo ""
+    log_info "=== Public Directories ==="
+    echo ""
+    echo "  /public/certificates/  - NFT certificate images"
+    echo "  /public/avatars/       - User uploaded profile photos"
     echo ""
     log_info "=== Required Environment Variables ==="
     echo ""
@@ -833,14 +908,16 @@ show_menu() {
     echo "3) Setup database only"
     echo "4) Run migrations only"
     echo "5) Seed VIP profiles"
-    echo "6) Configure environment only"
-    echo "7) Build application only"
-    echo "8) Configure Nginx only"
-    echo "9) Setup SSL only"
-    echo "10) Configure PM2 only"
-    echo "11) Quick update (git pull + rebuild + restart)"
-    echo "12) Check status"
-    echo "13) Show migrations & packages info"
+    echo "6) Create prediction markets"
+    echo "7) Regenerate NFT certificates"
+    echo "8) Configure environment only"
+    echo "9) Build application only"
+    echo "10) Configure Nginx only"
+    echo "11) Setup SSL only"
+    echo "12) Configure PM2 only"
+    echo "13) Quick update (git pull + rebuild + restart)"
+    echo "14) Check status"
+    echo "15) Show migrations & packages info"
     echo "0) Exit"
     echo ""
 }
@@ -852,6 +929,8 @@ full_deployment() {
     setup_database
     run_migrations
     seed_vip_profiles
+    create_prediction_markets
+    regenerate_certificates
     configure_env
     build_app
     configure_nginx
@@ -907,14 +986,16 @@ case $choice in
     3) setup_database ;;
     4) run_migrations ;;
     5) seed_vip_profiles ;;
-    6) configure_env ;;
-    7) build_app ;;
-    8) configure_nginx ;;
-    9) setup_ssl ;;
-    10) configure_pm2 ;;
-    11) quick_update ;;
-    12) check_status ;;
-    13) show_migrations_info ;;
+    6) create_prediction_markets ;;
+    7) regenerate_certificates ;;
+    8) configure_env ;;
+    9) build_app ;;
+    10) configure_nginx ;;
+    11) setup_ssl ;;
+    12) configure_pm2 ;;
+    13) quick_update ;;
+    14) check_status ;;
+    15) show_migrations_info ;;
     0) exit 0 ;;
     *) log_error "Invalid option" ;;
 esac

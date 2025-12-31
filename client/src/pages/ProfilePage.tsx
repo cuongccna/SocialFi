@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users, Camera, BadgeCheck, Sparkles, Rocket, Zap } from 'lucide-react';
+import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users, Camera, BadgeCheck, Sparkles, Rocket, Zap, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { getUserStats, formatNumber, boostProfile, type UserStats } from '../services/profile.service';
+import { getUserStats, formatNumber, boostProfile, uploadAvatar, type UserStats } from '../services/profile.service';
 import { getMatches } from '../services/matches.service';
 import { haptic } from '../utils/telegram';
 import { getAvatarUrl, isDefaultAvatar, avatarRingClass } from '../utils/helpers';
@@ -16,6 +16,15 @@ export default function ProfilePage() {
   const [showUploadTooltip, setShowUploadTooltip] = useState(false);
   const [isBoosting, setIsBoosting] = useState(false);
   const [boostMessage, setBoostMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
+  
+  // Upload state
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -90,6 +99,75 @@ export default function ProfilePage() {
     ? Math.ceil((new Date(user!.boosted_until!).getTime() - Date.now()) / (1000 * 60))
     : 0;
 
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setBoostMessage({ type: 'error', text: 'Please select an image file' });
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setBoostMessage({ type: 'error', text: 'Image too large. Max 5MB allowed.' });
+      return;
+    }
+    
+    setSelectedFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setUploadPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle upload
+  const handleUpload = async () => {
+    if (!selectedFile || isUploading) return;
+    
+    try {
+      setIsUploading(true);
+      haptic.impact('heavy');
+      
+      const result = await uploadAvatar(selectedFile);
+      
+      haptic.notification('success');
+      setBoostMessage({ type: 'success', text: result.message });
+      
+      // Clear preview
+      setUploadPreview(null);
+      setSelectedFile(null);
+      setShowUploadTooltip(false);
+      
+      // Refresh user data
+      if (refreshUser) {
+        await refreshUser();
+      }
+      await loadStats();
+      
+    } catch (err: any) {
+      haptic.notification('error');
+      setBoostMessage({ 
+        type: 'error', 
+        text: err.message || 'Failed to upload photo' 
+      });
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setBoostMessage(null), 5000);
+    }
+  };
+
+  // Cancel upload
+  const cancelUpload = () => {
+    setUploadPreview(null);
+    setSelectedFile(null);
+  };
+
   // Loading state
   if (authLoading || !user) {
     return (
@@ -112,11 +190,17 @@ export default function ProfilePage() {
           <div className="flex gap-2">
             <button 
               onClick={() => { haptic.impact('light'); loadStats(); }}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+              disabled={isLoading}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+              title="Refresh stats"
             >
               <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
-            <button className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+            <button 
+              onClick={() => { haptic.impact('light'); setShowSettings(true); }}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+              title="Settings"
+            >
               <Settings className="w-5 h-5" />
             </button>
           </div>
@@ -142,12 +226,26 @@ export default function ProfilePage() {
                   onClick={() => {
                     haptic.impact('light');
                     setShowUploadTooltip(!showUploadTooltip);
-                    // TODO: Implement actual upload flow
                   }}
                   whileTap={{ scale: 0.9 }}
                   className="absolute -top-1 -left-1 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30"
                 >
                   <Camera className="w-4 h-4 text-dark" />
+                </motion.button>
+              )}
+              
+              {/* Change photo button for verified users */}
+              {!isDefaultAvatar(user) && (
+                <motion.button
+                  onClick={() => {
+                    haptic.impact('light');
+                    fileInputRef.current?.click();
+                  }}
+                  whileTap={{ scale: 0.9 }}
+                  className="absolute -bottom-1 -left-1 w-6 h-6 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm"
+                  title="Change photo"
+                >
+                  <Camera className="w-3 h-3 text-white" />
                 </motion.button>
               )}
               
@@ -193,17 +291,70 @@ export default function ProfilePage() {
                       Upload a real photo to get the <span className="text-neon-blue">✓ Verified Badge</span> and 
                       <span className="text-neon-yellow font-bold"> boost your Market Cap by 10%!</span>
                     </p>
-                    <button 
-                      className="btn-primary text-sm py-2 px-4 flex items-center gap-2"
-                      onClick={() => {
-                        haptic.impact('medium');
-                        // TODO: Implement upload
-                        alert('Photo upload coming soon!');
-                      }}
-                    >
-                      <Camera className="w-4 h-4" />
-                      Upload Photo
-                    </button>
+                    
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    
+                    {/* Upload Preview */}
+                    {uploadPreview ? (
+                      <div className="mb-3">
+                        <div className="relative inline-block">
+                          <img 
+                            src={uploadPreview} 
+                            alt="Preview" 
+                            className="w-20 h-20 rounded-full object-cover border-2 border-primary"
+                          />
+                          <button
+                            onClick={cancelUpload}
+                            className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-neon-red flex items-center justify-center"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                        <div className="flex gap-2 mt-3">
+                          <button 
+                            onClick={handleUpload}
+                            disabled={isUploading}
+                            className="btn-primary text-sm py-2 px-4 flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {isUploading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                Confirm Upload
+                              </>
+                            )}
+                          </button>
+                          <button 
+                            onClick={cancelUpload}
+                            className="text-sm py-2 px-4 text-white/60 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button 
+                        className="btn-primary text-sm py-2 px-4 flex items-center gap-2"
+                        onClick={() => {
+                          haptic.impact('medium');
+                          fileInputRef.current?.click();
+                        }}
+                      >
+                        <Camera className="w-4 h-4" />
+                        Upload Photo
+                      </button>
+                    )}
                   </div>
                   <button 
                     onClick={() => setShowUploadTooltip(false)}
@@ -399,6 +550,103 @@ export default function ProfilePage() {
           <p className="mt-1">User ID: {user.id?.slice(0, 8)}...</p>
         </div>
       </div>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end justify-center"
+            onClick={() => setShowSettings(false)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-dark-100 rounded-t-3xl p-6"
+            >
+              {/* Handle */}
+              <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-6" />
+              
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-primary" />
+                Settings
+              </h2>
+              
+              {/* Settings Options */}
+              <div className="space-y-4">
+                {/* Change Photo */}
+                <button
+                  onClick={() => {
+                    haptic.impact('light');
+                    setShowSettings(false);
+                    if (isDefaultAvatar(user)) {
+                      setShowUploadTooltip(true);
+                    } else {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  className="w-full p-4 bg-white/5 rounded-xl flex items-center gap-4 hover:bg-white/10 transition-colors"
+                >
+                  <div className="p-2 rounded-full bg-primary/20">
+                    <Camera className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium">Change Photo</div>
+                    <div className="text-sm text-white/60">
+                      {isDefaultAvatar(user) ? 'Upload to get verified (+10% boost)' : 'Update your profile picture'}
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-white/40" />
+                </button>
+                
+                {/* Notification Settings (Coming Soon) */}
+                <div className="w-full p-4 bg-white/5 rounded-xl flex items-center gap-4 opacity-50">
+                  <div className="p-2 rounded-full bg-neon-blue/20">
+                    <Zap className="w-5 h-5 text-neon-blue" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium">Notifications</div>
+                    <div className="text-sm text-white/60">Coming soon</div>
+                  </div>
+                </div>
+                
+                {/* Privacy Settings (Coming Soon) */}
+                <div className="w-full p-4 bg-white/5 rounded-xl flex items-center gap-4 opacity-50">
+                  <div className="p-2 rounded-full bg-neon-purple/20">
+                    <Settings className="w-5 h-5 text-neon-purple" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-medium">Privacy</div>
+                    <div className="text-sm text-white/60">Coming soon</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Close Button */}
+              <button
+                onClick={() => setShowSettings(false)}
+                className="w-full mt-6 py-3 bg-white/10 rounded-xl font-medium hover:bg-white/20 transition-colors"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* Hidden file input for verified users */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
     </div>
   );
 }

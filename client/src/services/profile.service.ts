@@ -145,3 +145,46 @@ export async function fudUser(targetId: string, reason?: string): Promise<FudRes
 export async function getFudStatus(targetId: string): Promise<FudStatus> {
   return await api.get<FudStatus>(`/fud/status/${targetId}`);
 }
+
+// ==========================================
+// Avatar Upload APIs
+// ==========================================
+
+export interface UploadAvatarResult {
+  success: boolean;
+  message: string;
+  user: {
+    id: string;
+    display_name: string;
+    avatar_url: string;
+    market_price: number;
+    price_change_24h: number;
+  };
+  bonus_applied: boolean;
+  bonus_percent: number;
+}
+
+/**
+ * Upload user avatar image
+ * First upload gives +10% market price boost (Verified Badge)
+ */
+export async function uploadAvatar(file: File): Promise<UploadAvatarResult> {
+  const formData = new FormData();
+  formData.append('avatar', file);
+  
+  // Use fetch directly for FormData (axios sometimes has issues with multipart)
+  const response = await fetch('/api/users/avatar', {
+    method: 'POST',
+    headers: {
+      'Authorization': localStorage.getItem('initData') || '',
+    },
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to upload avatar');
+  }
+  
+  return response.json();
+}

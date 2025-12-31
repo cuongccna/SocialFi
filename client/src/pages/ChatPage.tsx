@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Send, Loader2, MessageCircle, Heart, Coins 
+  ArrowLeft, Send, Loader2, MessageCircle, Heart, Coins, Smile
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -15,6 +15,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../utils/telegram';
 import { useSocket } from '../hooks/useSocket';
+import StickerPicker from '../components/StickerPicker';
+import { type Sticker, STICKER_REWARD } from '../data/stickers';
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -33,11 +35,13 @@ export default function ChatPage() {
   const [jointBalance, setJointBalance] = useState(0);
   const [showBalanceBump, setShowBalanceBump] = useState(false);
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
-  const [floatingRewards, setFloatingRewards] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [floatingRewards, setFloatingRewards] = useState<{ id: number; x: number; y: number; amount: number }[]>([]);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sendButtonRef = useRef<HTMLButtonElement>(null);
+  const stickerButtonRef = useRef<HTMLButtonElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Real-time socket connection
@@ -180,7 +184,8 @@ export default function ChatPage() {
         setFloatingRewards(prev => [...prev, { 
           id: rewardId, 
           x: buttonRect.left + buttonRect.width / 2,
-          y: buttonRect.top 
+          y: buttonRect.top,
+          amount: 0.1
         }]);
         setTimeout(() => {
           setFloatingRewards(prev => prev.filter(r => r.id !== rewardId));
@@ -194,6 +199,75 @@ export default function ChatPage() {
     } catch (err) {
       console.error('Failed to send message:', err);
       setNewMessage(content); // Restore message on failure
+      haptic.notification('error');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Handle sending stickers
+  const handleSendSticker = async (sticker: Sticker) => {
+    if (!selectedConversation || isSending) return;
+
+    setIsSending(true);
+    haptic.impact('heavy');
+
+    // Optimistically add sticker message
+    const optimisticMessage: Message = {
+      id: String(Date.now()),
+      relationship_id: selectedConversation.relationship_id,
+      sender_id: String(user?.id || ''),
+      sender_name: user?.display_name || '',
+      sender_avatar: user?.avatar_url || null,
+      content: sticker.url,
+      type: 'STICKER',
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+
+    try {
+      // Send via socket with STICKER type
+      if (isConnected) {
+        socketSendMessage(sticker.url, 'STICKER');
+        // Stickers give more reward!
+        setJointBalance(prev => prev + STICKER_REWARD);
+        setShowBalanceBump(true);
+        setTimeout(() => setShowBalanceBump(false), 500);
+      } else {
+        // Fallback to REST API
+        const message = await sendMessage(selectedConversation.relationship_id, sticker.url, 'STICKER');
+        setMessages(prev => prev.map(m => 
+          m.id === optimisticMessage.id ? message : m
+        ));
+        setJointBalance(prev => prev + STICKER_REWARD);
+        setShowBalanceBump(true);
+        setTimeout(() => setShowBalanceBump(false), 500);
+      }
+
+      // Trigger floating reward animation (stickers give more!)
+      const rewardId = Date.now();
+      const buttonRect = stickerButtonRef.current?.getBoundingClientRect();
+      if (buttonRect) {
+        setFloatingRewards(prev => [...prev, { 
+          id: rewardId, 
+          x: buttonRect.left + buttonRect.width / 2,
+          y: buttonRect.top,
+          amount: STICKER_REWARD
+        }]);
+        setTimeout(() => {
+          setFloatingRewards(prev => prev.filter(r => r.id !== rewardId));
+        }, 1500);
+      }
+
+      // Scroll to bottom
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } catch (err) {
+      console.error('Failed to send sticker:', err);
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id));
       haptic.notification('error');
     } finally {
       setIsSending(false);
@@ -433,25 +507,45 @@ export default function ChatPage() {
 
         {messages.map((msg) => {
           const isMe = msg.sender_id === user?.id;
+          const isSticker = msg.type === 'STICKER' || msg.content?.startsWith('https://media.giphy.com');
           
           return (
-            <div
+            <motion.div
               key={msg.id}
+              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
               className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
             >
-              <div
-                className={`max-w-[80%] px-4 py-2 rounded-2xl ${
-                  isMe
-                    ? 'bg-primary text-dark rounded-br-md'
-                    : 'bg-white/10 text-white rounded-bl-md'
-                }`}
-              >
-                <p className="break-words">{msg.content}</p>
-                <p className={`text-xs mt-1 ${isMe ? 'text-dark/60' : 'text-white/40'}`}>
-                  {formatMessageTime(msg.created_at)}
-                </p>
-              </div>
-            </div>
+              {isSticker ? (
+                // Sticker Message
+                <div className="max-w-[200px]">
+                  <motion.img
+                    src={msg.content}
+                    alt="Sticker"
+                    className="w-full h-auto rounded-xl"
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: 'spring', stiffness: 300 }}
+                  />
+                  <p className={`text-xs mt-1 ${isMe ? 'text-right text-white/40' : 'text-left text-white/40'}`}>
+                    {formatMessageTime(msg.created_at)}
+                  </p>
+                </div>
+              ) : (
+                // Text Message
+                <div
+                  className={`max-w-[80%] px-4 py-2 rounded-2xl ${
+                    isMe
+                      ? 'bg-primary text-dark rounded-br-md'
+                      : 'bg-white/10 text-white rounded-bl-md'
+                  }`}
+                >
+                  <p className="break-words">{msg.content}</p>
+                  <p className={`text-xs mt-1 ${isMe ? 'text-dark/60' : 'text-white/40'}`}>
+                    {formatMessageTime(msg.created_at)}
+                  </p>
+                </div>
+              )}
+            </motion.div>
           );
         })}
         
@@ -497,7 +591,21 @@ export default function ChatPage() {
           </div>
         )}
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Sticker Button */}
+          <button
+            ref={stickerButtonRef}
+            onClick={() => {
+              haptic.impact('light');
+              setShowStickerPicker(true);
+            }}
+            disabled={isSending}
+            className="p-3 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-all active:scale-95"
+            title="Send Sticker (+0.5 $LOVE)"
+          >
+            <Smile className="w-5 h-5 text-yellow-400" />
+          </button>
+          
           <input
             ref={inputRef}
             type="text"
@@ -523,8 +631,15 @@ export default function ChatPage() {
           </button>
         </div>
       </div>
+
+      {/* Sticker Picker */}
+      <StickerPicker
+        isOpen={showStickerPicker}
+        onClose={() => setShowStickerPicker(false)}
+        onSelectSticker={handleSendSticker}
+      />
       
-      {/* Floating +0.1 $LOVE Rewards */}
+      {/* Floating $LOVE Rewards */}
       <AnimatePresence>
         {floatingRewards.map((reward) => (
           <motion.div
@@ -548,10 +663,14 @@ export default function ChatPage() {
               top: reward.y - 20,
             }}
           >
-            <div className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-yellow-400 to-green-400 rounded-full shadow-lg">
-              <span className="text-dark font-bold text-sm">+0.1</span>
+            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full shadow-lg ${
+              reward.amount >= 0.5 
+                ? 'bg-gradient-to-r from-neon-purple via-primary to-yellow-400' 
+                : 'bg-gradient-to-r from-yellow-400 to-green-400'
+            }`}>
+              <span className="text-dark font-bold text-sm">+{reward.amount}</span>
               <span className="text-dark/80 text-xs">$LOVE</span>
-              <span className="text-base">💰</span>
+              <span className="text-base">{reward.amount >= 0.5 ? '🎉' : '💰'}</span>
             </div>
           </motion.div>
         ))}

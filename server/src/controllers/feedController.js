@@ -166,11 +166,11 @@ async function getFeed(req, res, next) {
           -- Exclude users who are already matched (mutual like)
           AND target_id NOT IN (
             SELECT CASE 
-              WHEN user1_id = $1 THEN user2_id 
-              ELSE user1_id 
+              WHEN user_a = $1 THEN user_b 
+              ELSE user_a 
             END
-            FROM matches
-            WHERE user1_id = $1 OR user2_id = $1
+            FROM relationships
+            WHERE user_a = $1 OR user_b = $1
           )
         ORDER BY created_at ASC
         LIMIT $2;

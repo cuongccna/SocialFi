@@ -103,6 +103,10 @@ export default function FeedPage() {
   const [showMatchPopup, setShowMatchPopup] = useState(false);
   const [matchedUser, setMatchedUser] = useState<FeedUser | null>(null);
   const [matchResult, setMatchResult] = useState<SwipeResult | null>(null);
+  
+  // Search radius state (starts at 10km, doubles each refresh)
+  const [searchRadius, setSearchRadius] = useState(10);
+  const [radiusMessage, setRadiusMessage] = useState<string | null>(null);
 
   // Load feed on mount
   useEffect(() => {
@@ -191,24 +195,66 @@ export default function FeedPage() {
     setIsEmpty(true);
   }, []);
 
-  // Refresh feed
+  // Refresh feed with expanded radius
   const handleRefresh = useCallback(async () => {
     setIsLoading(true);
     haptic.impact('medium');
+    
+    // If already at max radius, reset everything and start fresh
+    if (searchRadius >= 500) {
+      setSearchRadius(10); // Reset to initial radius
+      setRadiusMessage("Starting fresh! Let's find you new matches! 🔄");
+      
+      try {
+        const feedUsers = await refreshFeed(
+          user?.latitude || undefined,
+          user?.longitude || undefined,
+          10 // Reset to 10km
+        );
+
+        if (feedUsers.length > 0) {
+          setUsers(feedUsers);
+          setIsEmpty(false);
+          setSwipeCount(0);
+          setRadiusMessage(null);
+        } else {
+          setIsEmpty(true);
+        }
+      } catch (err) {
+        console.error('Failed to reset feed:', err);
+        setError('Failed to refresh. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+    
+    // Double the radius each time (max 500km)
+    const newRadius = Math.min(searchRadius * 2, 500);
+    setSearchRadius(newRadius);
+    
+    // Show encouraging message
+    if (newRadius > 10) {
+      setRadiusMessage(`Searching ${newRadius}km away... Let's find you someone special! 🌍`);
+    }
     
     try {
       const feedUsers = await refreshFeed(
         user?.latitude || undefined,
         user?.longitude || undefined,
-        10
+        newRadius
       );
 
       if (feedUsers.length === 0) {
         setIsEmpty(true);
+        if (newRadius >= 500) {
+          setRadiusMessage("You've explored the whole map! True degen explorer! 🏆");
+        }
       } else {
         setUsers(feedUsers);
         setIsEmpty(false);
         setSwipeCount(0);
+        setRadiusMessage(null);
       }
     } catch (err) {
       console.error('Failed to refresh feed:', err);
@@ -216,7 +262,7 @@ export default function FeedPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, searchRadius]);
 
   // Prefetch more cards (Infinite Loading)
   const handleNeedMore = useCallback(async () => {
@@ -285,17 +331,36 @@ export default function FeedPage() {
           <span className="text-5xl">🏝️</span>
         </div>
         <h2 className="text-2xl font-bold mb-3">No More Traders</h2>
-        <p className="text-white/60 mb-8 max-w-xs">
-          You've reviewed all nearby profiles. Expand your radius or check back later!
+        <p className="text-white/60 mb-4 max-w-xs">
+          {radiusMessage || "You've reviewed all nearby profiles. Let me search further for you!"}
         </p>
+        
+        {/* Current radius indicator */}
+        <div className="flex items-center gap-2 text-white/40 text-sm mb-6">
+          <MapPin className="w-4 h-4" />
+          <span>Current radius: {searchRadius}km</span>
+          {searchRadius < 500 && (
+            <span className="text-primary">→ {Math.min(searchRadius * 2, 500)}km</span>
+          )}
+          {searchRadius >= 500 && (
+            <span className="text-primary">→ Reset to 10km</span>
+          )}
+        </div>
+        
         <button
           onClick={handleRefresh}
           disabled={isLoading}
           className="px-8 py-4 bg-primary text-dark font-bold rounded-2xl flex items-center gap-3 hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh Feed
+          {searchRadius >= 500 ? '🔄 Start Fresh' : `Expand to ${Math.min(searchRadius * 2, 500)}km`}
         </button>
+        
+        {searchRadius >= 500 && (
+          <p className="mt-4 text-xs text-white/30">
+            Click to reset and discover new traders! ✨
+          </p>
+        )}
       </div>
     );
   }

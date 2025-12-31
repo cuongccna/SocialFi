@@ -6,7 +6,8 @@
 const { pool } = require('../config/db');
 
 // Constants
-const LOVE_PER_MESSAGE = 0.1;
+const LOVE_PER_TEXT_MESSAGE = 0.1;
+const LOVE_PER_STICKER = 0.5;
 
 /**
  * Initialize Socket.io chat handlers
@@ -135,9 +136,11 @@ function initChatSocket(io) {
 
         // ==========================================
         // SocialFi Hook: Harvest Love (Joint Venture)
+        // Stickers reward +0.5 $LOVE, text messages +0.1 $LOVE
         // ==========================================
+        const rewardAmount = type === 'STICKER' ? LOVE_PER_STICKER : LOVE_PER_TEXT_MESSAGE;
         const currentBalance = parseFloat(relCheck.rows[0].joint_balance) || 0;
-        const newBalance = currentBalance + LOVE_PER_MESSAGE;
+        const newBalance = currentBalance + rewardAmount;
 
         await pool.query(`
           UPDATE relationships 
@@ -152,7 +155,7 @@ function initChatSocket(io) {
         io.to(roomName).emit('update_balance', {
           relationship_id,
           joint_balance: newBalance,
-          increment: LOVE_PER_MESSAGE,
+          increment: rewardAmount,
         });
 
         console.log(`💬 Message sent in ${roomName}: ${content.substring(0, 30)}...`);

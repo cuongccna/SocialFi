@@ -22,6 +22,32 @@ export interface Match {
   price_change_24h: number;
   last_active_at: string | null;
   combined_market_cap: number;
+  // NFT fields
+  nft_image_url?: string | null;
+  tx_hash?: string | null;
+  block_height?: number | null;
+  gas_fee?: number | null;
+  nft_metadata?: NftMetadata | null;
+}
+
+export interface NftMetadata {
+  tx_hash: string;
+  block_height: number;
+  gas_fee: number;
+  minted_date: string;
+  network: string;
+  combined_market_cap: string;
+}
+
+export interface NftData {
+  tx_hash: string;
+  image_url: string;
+  contract_address: string;
+  block_height: number;
+  gas_fee: number;
+  minted_date: string;
+  network: string;
+  combined_market_cap: string;
 }
 
 interface MatchesResponse {
@@ -41,6 +67,17 @@ interface ContractActionResponse {
   success: boolean;
   message: string;
   relationship: object;
+}
+
+export interface MintContractResponse {
+  success: boolean;
+  message: string;
+  relationship: Match;
+  nft: NftData;
+  cost: {
+    amount: number;
+    currency: string;
+  };
 }
 
 /**
@@ -70,9 +107,10 @@ export async function getMatchById(id: string): Promise<object> {
 
 /**
  * Mint relationship NFT contract
+ * Returns certificate data and NFT metadata
  */
-export async function mintContract(id: string): Promise<ContractActionResponse> {
-  const response = await api.post<ContractActionResponse>(`/matches/${id}/mint`);
+export async function mintContract(id: string): Promise<MintContractResponse> {
+  const response = await api.post<MintContractResponse>(`/matches/${id}/mint`);
   return response;
 }
 

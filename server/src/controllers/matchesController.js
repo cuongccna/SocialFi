@@ -1,10 +1,14 @@
-﻿/**
+/**
  * Matches Controller
  * Handles relationships and matches
  */
 
 const { pool, query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
+const { generateCertificate } = require('../services/certificateGenerator');
+
+// Minting cost in $LOVE
+const MINT_COST = 500;
 
 // Yield Farming Constants
 const LOVE_PER_HOUR = 10; // $LOVE earned per hour per couple
@@ -28,6 +32,11 @@ async function getMatches(req, res, next) {
         r.contract_minted_at,
         r.start_date,
         r.created_at as matched_at,
+        r.nft_image_url,
+        r.tx_hash,
+        r.block_height,
+        r.gas_fee,
+        r.nft_metadata,
         CASE 
           WHEN r.user_a = $1 THEN u_b.id
           ELSE u_a.id
@@ -141,51 +150,147 @@ async function getMatchById(req, res, next) {
 
 /**
  * POST /matches/:id/mint
- * Mint relationship NFT contract
+ * Mint relationship NFT contract with certificate generation
+ * Cost: 500 $LOVE (deducted from initiator)
  */
 async function mintContract(req, res, next) {
+  const client = await getClient();
+  
   try {
     const userId = req.user.id;
     const { id } = req.params;
 
-    // Check relationship exists and user is part of it
-    const check = await pool.query(`
-      SELECT * FROM relationships 
-      WHERE id = $1 
-        AND (user_a = $2 OR user_b = $2)
-        AND status = 'MATCHED'
+    await client.query('BEGIN');
+
+    // 1. Check relationship exists and user is part of it
+    const relationshipCheck = await client.query(`
+      SELECT 
+        r.*,
+        u_a.id as user_a_id,
+        u_a.display_name as user_a_name,
+        u_a.avatar_url as user_a_avatar,
+        u_a.market_price as user_a_price,
+        u_b.id as user_b_id,
+        u_b.display_name as user_b_name,
+        u_b.avatar_url as user_b_avatar,
+        u_b.market_price as user_b_price
+      FROM relationships r
+      JOIN users u_a ON r.user_a = u_a.id
+      JOIN users u_b ON r.user_b = u_b.id
+      WHERE r.id = $1 
+        AND (r.user_a = $2 OR r.user_b = $2)
+        AND r.status = 'MATCHED'
     `, [id, userId]);
 
-    if (check.rows.length === 0) {
+    if (relationshipCheck.rows.length === 0) {
       throw new ApiError(404, 'Relationship not found or already minted');
     }
 
-    // Generate mock contract address (in production, this would be real blockchain interaction)
+    const relationship = relationshipCheck.rows[0];
+
+    // 2. Check user has enough $LOVE balance
+    const userCheck = await client.query(
+      'SELECT balance_love FROM users WHERE id = $1 FOR UPDATE',
+      [userId]
+    );
+
+    const userBalance = parseFloat(userCheck.rows[0].balance_love) || 0;
+    if (userBalance < MINT_COST) {
+      throw new ApiError(400, `Insufficient balance. Need ${MINT_COST} $LOVE to mint. You have ${userBalance.toFixed(2)} $LOVE.`);
+    }
+
+    // 3. Deduct $LOVE from initiator
+    await client.query(
+      'UPDATE users SET balance_love = balance_love - $1, updated_at = NOW() WHERE id = $2',
+      [MINT_COST, userId]
+    );
+
+    // 4. Prepare user data for certificate
+    const userA = {
+      id: relationship.user_a_id,
+      display_name: relationship.user_a_name,
+      avatar_url: relationship.user_a_avatar,
+      market_price: relationship.user_a_price,
+    };
+
+    const userB = {
+      id: relationship.user_b_id,
+      display_name: relationship.user_b_name,
+      avatar_url: relationship.user_b_avatar,
+      market_price: relationship.user_b_price,
+    };
+
+    // 5. Generate certificate image and metadata
+    const { imagePath, txHash, metadata } = await generateCertificate(userA, userB, id);
+
+    // 6. Generate mock contract address
     const contractAddress = `0x${Buffer.from(id).toString('hex').slice(0, 40)}`;
 
-    // Update relationship
-    const result = await pool.query(`
+    // 7. Update relationship with NFT data
+    const result = await client.query(`
       UPDATE relationships
       SET 
         status = 'MINTED_CONTRACT',
         contract_address = $1,
         contract_minted_at = NOW(),
+        nft_image_url = $2,
+        tx_hash = $3,
+        block_height = $4,
+        gas_fee = $5,
+        nft_metadata = $6,
         updated_at = NOW()
-      WHERE id = $2
+      WHERE id = $7
       RETURNING *
-    `, [contractAddress, id]);
+    `, [
+      contractAddress,
+      imagePath,
+      txHash,
+      metadata.block_height,
+      MINT_COST,
+      JSON.stringify(metadata),
+      id
+    ]);
 
+    // 8. Create prediction market for this relationship (30 day expiry)
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 30);
+
+    await client.query(`
+      INSERT INTO prediction_markets (relationship_id, expiry_date, pool_long, pool_short, status)
+      VALUES ($1, $2, 0, 0, 'OPEN')
+      ON CONFLICT (relationship_id) DO NOTHING
+    `, [id, expiryDate]);
+
+    await client.query('COMMIT');
+
+    // 9. Return success with certificate data
     res.json({
       success: true,
-      message: 'ðŸ’ Relationship contract minted!',
+      message: 'Love Contract successfully minted on-chain!',
       relationship: result.rows[0],
+      nft: {
+        tx_hash: txHash,
+        image_url: imagePath,
+        contract_address: contractAddress,
+        block_height: metadata.block_height,
+        gas_fee: MINT_COST,
+        minted_date: metadata.minted_date,
+        network: metadata.network,
+        combined_market_cap: metadata.combined_market_cap,
+      },
+      cost: {
+        amount: MINT_COST,
+        currency: '$LOVE',
+      },
     });
 
   } catch (err) {
+    await client.query('ROLLBACK');
     next(err);
+  } finally {
+    client.release();
   }
 }
-
 /**
  * POST /matches/:id/burn
  * Burn (end) relationship contract

@@ -5,7 +5,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000';
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3005';
 
 interface Message {
   id: number;
@@ -39,8 +39,10 @@ export function useSocket(options: UseSocketOptions = {}) {
     if (!user) return;
 
     const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
+      // Use polling first, then upgrade to websocket (avoids initial websocket failure warning)
+      transports: ['polling', 'websocket'],
       autoConnect: true,
+      upgrade: true,
     });
 
     socketRef.current = socket;
@@ -72,8 +74,8 @@ export function useSocket(options: UseSocketOptions = {}) {
 
     // Join room
     socket.emit('join_room', {
-      conversationId: options.conversationId,
-      userId: user.id,
+      relationship_id: options.conversationId,
+      user_id: user.id,
     });
 
     // Listen for incoming messages
@@ -112,8 +114,7 @@ export function useSocket(options: UseSocketOptions = {}) {
 
     return () => {
       socket.emit('leave_room', {
-        conversationId: options.conversationId,
-        userId: user.id,
+        relationship_id: options.conversationId,
       });
       socket.off('receive_message', handleMessage);
       socket.off('typing_start', handleTypingStart);
@@ -130,8 +131,8 @@ export function useSocket(options: UseSocketOptions = {}) {
       if (!socket || !options.conversationId || !user) return;
 
       socket.emit('send_message', {
-        conversationId: options.conversationId,
-        senderId: user.id,
+        relationship_id: options.conversationId,
+        sender_id: user.id,
         content,
         type,
       });
@@ -145,8 +146,8 @@ export function useSocket(options: UseSocketOptions = {}) {
     if (!socket || !options.conversationId || !user) return;
 
     socket.emit('typing_start', {
-      conversationId: options.conversationId,
-      userId: user.id,
+      relationship_id: options.conversationId,
+      user_id: user.id,
     });
   }, [options.conversationId, user]);
 
@@ -155,8 +156,8 @@ export function useSocket(options: UseSocketOptions = {}) {
     if (!socket || !options.conversationId || !user) return;
 
     socket.emit('typing_stop', {
-      conversationId: options.conversationId,
-      userId: user.id,
+      relationship_id: options.conversationId,
+      user_id: user.id,
     });
   }, [options.conversationId, user]);
 
@@ -166,8 +167,8 @@ export function useSocket(options: UseSocketOptions = {}) {
     if (!socket || !options.conversationId || !user) return;
 
     socket.emit('mark_read', {
-      conversationId: options.conversationId,
-      userId: user.id,
+      relationship_id: options.conversationId,
+      user_id: user.id,
     });
   }, [options.conversationId, user]);
 

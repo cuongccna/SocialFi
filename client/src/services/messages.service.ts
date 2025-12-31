@@ -5,11 +5,14 @@
 
 import { api } from '../api/axiosClient';
 
+export type MessageType = 'TEXT' | 'STICKER' | 'IMAGE';
+
 export interface Message {
   id: string;
   relationship_id: string;
   sender_id: string;
   content: string;
+  type?: MessageType;
   is_read: boolean;
   created_at: string;
   sender_name: string;
@@ -69,8 +72,15 @@ export async function getMessages(
 /**
  * Send a message
  */
-export async function sendMessage(matchId: string, content: string): Promise<Message> {
-  const response = await api.post<SendMessageResponse>(`/messages/${matchId}`, { content });
+export async function sendMessage(
+  matchId: string, 
+  content: string, 
+  messageType: MessageType = 'TEXT'
+): Promise<Message> {
+  const response = await api.post<SendMessageResponse>(`/messages/${matchId}`, { 
+    content,
+    message_type: messageType,
+  });
   return response.message;
 }
 
