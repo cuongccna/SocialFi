@@ -897,6 +897,23 @@ show_migrations_info() {
     echo ""
 }
 
+reset_swipes() {
+    log_info "Reset swipes for a user (for testing)..."
+    read -p "Enter Telegram ID: " telegram_id
+    
+    if [ -z "$telegram_id" ]; then
+        log_error "Telegram ID required"
+        return 1
+    fi
+    
+    cd "$APP_DIR/server"
+    node scripts/reset-swipes.js "$telegram_id"
+    
+    log_success "Swipes reset complete!"
+    log_info "Restarting API..."
+    pm2 restart cryptocrush-api 2>/dev/null || true
+}
+
 show_menu() {
     echo ""
     echo -e "${GREEN}=========================================${NC}"
@@ -920,6 +937,7 @@ show_menu() {
     echo "13) Quick update (git pull + rebuild + restart)"
     echo "14) Check status"
     echo "15) Show migrations & packages info"
+    echo "16) Reset swipes (for testing)"
     echo "0) Exit"
     echo ""
 }
@@ -998,6 +1016,7 @@ case $choice in
     13) quick_update ;;
     14) check_status ;;
     15) show_migrations_info ;;
+    16) reset_swipes ;;
     0) exit 0 ;;
     *) log_error "Invalid option" ;;
 esac
