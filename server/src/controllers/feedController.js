@@ -96,6 +96,7 @@ async function getFeed(req, res, next) {
     
     const nearbyResult = await query(nearbyQuery, [lat, lng, userId, radiusKm, limit, offset]);
     users = nearbyResult.rows;
+    console.log(`[Feed] Step 1 - Nearby: ${users.length} users within ${radiusKm}km`);
     
     // =========================================
     // STEP 2: Expansion - Global users if < MIN_FEED_SIZE
@@ -146,6 +147,7 @@ async function getFeed(req, res, next) {
       
       const globalResult = await query(globalQuery, [lat, lng, userId, excludeIds, remaining]);
       users = [...users, ...globalResult.rows];
+      console.log(`[Feed] Step 2 - Global: added ${globalResult.rows.length} users, total now ${users.length}`);
     }
     
     // =========================================
@@ -222,6 +224,7 @@ async function getFeed(req, res, next) {
         
         const resurrectedResult = await query(resurrectedQuery, [lat, lng, passedUserIds, excludeIds]);
         users = [...users, ...resurrectedResult.rows];
+        console.log(`[Feed] Step 3 - Resurrection: resurrected ${resurrectedResult.rows.length} users, total now ${users.length}`);
       }
     }
     
@@ -266,6 +269,7 @@ async function getFeed(req, res, next) {
     
     const existingIds = users.map(u => u.id);
     const vipResult = await query(vipQuery, [lat, lng, userId, existingIds, VIP_INJECT_COUNT]);
+    console.log(`[Feed] Step 4 - VIP: found ${vipResult.rows.length} VIP users`);
     
     if (vipResult.rows.length > 0) {
       // Update VIP last_active_at to NOW (always online)
