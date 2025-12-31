@@ -1,193 +1,205 @@
-﻿/**
- * Feed Controller
- * Handles the "Trading Floor" - finding nearby users to swipe
- * Uses Waterfall Logic to ensure users NEVER see an empty feed
+/**
+ * Feed Controller - INFINITE FEED EDITION
  * 
- * Waterfall Priority:
- * 1. Users within radius (10km) not yet interacted
- * 2. Global users sorted by market_price (if < 5 results)
- * 3. Resurrection - Reset PASS swipes and return them (if still < 5)
+ * Implements Waterfall Logic to ensure users NEVER see an empty screen.
+ * 
+ * Strategy:
+ * 1. LOCAL DISCOVERY: Users within radius (default 10km)
+ * 2. GLOBAL EXPANSION: Hot profiles worldwide if local < 5
+ * 3. RESURRECTION: Bring back PASS'd users if still < 5
+ * 
+ * The user will ALWAYS get profiles unless the database is completely empty.
  */
 
-const { query } = require('../config/db');
+const { query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const config = require('../config');
 
-const MIN_FEED_SIZE = 5; // Minimum profiles to show
-const VIP_INJECT_COUNT = 2; // Number of VIP profiles to inject per feed
+// ============================================
+// CONSTANTS
+// ============================================
+const MIN_FEED_SIZE = 5;          // Minimum profiles before triggering next step
+const TARGET_FEED_SIZE = 10;      // Target number of profiles to return
+const DEFAULT_RADIUS_KM = 10;     // Default search radius
+const MAX_RADIUS_KM = 500;        // Maximum search radius
 
-/**
- * GET /feed
- * Waterfall logic to always return profiles
- */
+// ============================================
+// HELPER: Build SELECT fields for user query
+// ============================================
+const getUserSelectFields = (includeDistance = true) => `
+  u.id,
+  u.telegram_id,
+  u.username,
+  u.display_name,
+  u.bio,
+  u.avatar_url,
+  u.wallet_rank,
+  u.market_price,
+  u.price_change_24h,
+  u.boosted_until,
+  u.is_vip,
+  u.last_active_at,
+  CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted
+`;
+
+// ============================================
+// MAIN: GET /feed - Infinite Feed with Waterfall Logic
+// ============================================
 async function getFeed(req, res, next) {
+  const startTime = Date.now();
+  
   try {
     const userId = req.user.id;
     
-    // Get query params with default fallback to HCMC center
-    const lat = parseFloat(req.query.lat) || 10.8231;
+    // Parse query parameters
+    const lat = parseFloat(req.query.lat) || 10.8231;   // Default: HCMC
     const lng = parseFloat(req.query.lng) || 106.6297;
-    const radiusKm = Math.min(
-      parseFloat(req.query.radius) || config.constants.DEFAULT_SEARCH_RADIUS_KM,
-      config.constants.MAX_SEARCH_RADIUS_KM
-    );
-    const limit = parseInt(req.query.limit) || config.constants.FEED_LIMIT;
-    const offset = parseInt(req.query.offset) || 0;
+    const radiusKm = Math.min(parseFloat(req.query.radius) || DEFAULT_RADIUS_KM, MAX_RADIUS_KM);
+    const limit = Math.min(parseInt(req.query.limit) || TARGET_FEED_SIZE, 50);
     
-    // Validate coordinates range
+    // Validate coordinates
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      throw new ApiError(400, 'Coordinates out of range. lat: -90 to 90, lng: -180 to 180');
+      throw new ApiError(400, 'Invalid coordinates');
     }
     
-    // Update current user's location
-    await query(
-      `UPDATE users 
-       SET latitude = $1,
-           longitude = $2,
-           updated_at = NOW()
-       WHERE id = $3`,
-      [lat, lng, userId]
-    );
+    // Update current user's location (async, don't wait)
+    query(`
+      UPDATE users 
+      SET latitude = $1, longitude = $2, last_active_at = NOW(), updated_at = NOW()
+      WHERE id = $3
+    `, [lat, lng, userId]).catch(err => console.error('[Feed] Location update failed:', err.message));
     
+    // Results array and metadata
     let users = [];
-    let source = 'nearby'; // Track where results came from
     let resurrectedCount = 0;
+    const sources = { local: 0, global: 0, resurrected: 0 };
     
     // =========================================
-    // STEP 1: Priority - Users within radius
+    // STEP 1: LOCAL DISCOVERY
+    // Query users within radius, exclude swiped users
     // =========================================
-    const nearbyQuery = `
+    console.log(`[Feed] Step 1: Local Discovery (${radiusKm}km radius)`);
+    
+    const localQuery = `
       SELECT 
-        u.id,
-        u.telegram_id,
-        u.username,
-        u.display_name,
-        u.bio,
-        u.avatar_url,
-        u.wallet_rank,
-        u.market_price,
-        u.price_change_24h,
-        u.boosted_until,
-        CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
+        ${getUserSelectFields()},
         ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2) AS distance_km,
-        'nearby' AS source
+        'local' AS source
       FROM users u
       WHERE u.id != $3
         AND u.is_active = TRUE
         AND u.latitude IS NOT NULL
         AND u.longitude IS NOT NULL
-        -- Within radius
         AND calculate_distance_km($1, $2, u.latitude, u.longitude) <= $4
-        -- Exclude ALL swiped users (LIKE, PASS, SUPERLIKE)
-        AND u.id NOT IN (
-          SELECT target_id 
-          FROM swipes 
-          WHERE actor_id = $3
+        -- CRITICAL: Exclude ALL users already swiped
+        AND NOT EXISTS (
+          SELECT 1 FROM swipes s 
+          WHERE s.actor_id = $3 AND s.target_id = u.id
         )
-      ORDER BY 
-        -- Boosted profiles always at top
-        CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END ASC,
-        u.boosted_until DESC NULLS LAST,
+      ORDER BY
+        -- Boosted profiles first
+        CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END,
+        -- Then by market price (hot profiles)
         u.market_price DESC,
+        -- Then by distance
         calculate_distance_km($1, $2, u.latitude, u.longitude) ASC
-      LIMIT $5
-      OFFSET $6;
+      LIMIT $5;
     `;
     
-    const nearbyResult = await query(nearbyQuery, [lat, lng, userId, radiusKm, limit, offset]);
-    users = nearbyResult.rows;
-    console.log(`[Feed] Step 1 - Nearby: ${users.length} users within ${radiusKm}km`);
+    const localResult = await query(localQuery, [lat, lng, userId, radiusKm, limit]);
+    users = localResult.rows;
+    sources.local = users.length;
+    
+    console.log(`[Feed] Step 1 Result: ${users.length} local users found`);
     
     // =========================================
-    // STEP 2: Expansion - Global users if < MIN_FEED_SIZE
+    // STEP 2: GLOBAL EXPANSION
+    // If local < MIN_FEED_SIZE, fetch hot profiles worldwide
     // =========================================
-    if (users.length < MIN_FEED_SIZE && offset === 0) {
-      source = 'global';
+    if (users.length < MIN_FEED_SIZE) {
+      console.log(`[Feed] Step 2: Global Expansion (local=${users.length} < ${MIN_FEED_SIZE})`);
+      
       const remaining = limit - users.length;
       const excludeIds = users.map(u => u.id);
       
       const globalQuery = `
         SELECT 
-          u.id,
-          u.telegram_id,
-          u.username,
-          u.display_name,
-          u.bio,
-          u.avatar_url,
-          u.wallet_rank,
-          u.market_price,
-          u.price_change_24h,
-          u.boosted_until,
-          CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
+          ${getUserSelectFields()},
           CASE 
             WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
             THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
-            ELSE NULL
+            ELSE 999.0
           END AS distance_km,
           'global' AS source
         FROM users u
         WHERE u.id != $3
           AND u.is_active = TRUE
-          -- Exclude already fetched nearby users
+          -- Exclude users already in local results
           AND u.id != ALL($4::uuid[])
-          -- Exclude ALL swiped users
-          AND u.id NOT IN (
-            SELECT target_id 
-            FROM swipes 
-            WHERE actor_id = $3
+          -- CRITICAL: Exclude ALL users already swiped
+          AND NOT EXISTS (
+            SELECT 1 FROM swipes s 
+            WHERE s.actor_id = $3 AND s.target_id = u.id
           )
-        ORDER BY 
-          -- Boosted profiles always at top
-          CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END ASC,
-          u.boosted_until DESC NULLS LAST,
+        ORDER BY
+          -- Boosted profiles first
+          CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END,
+          -- Sort by market price DESC (show "hot" profiles)
           u.market_price DESC,
-          u.created_at DESC
+          -- Recently active users
+          u.last_active_at DESC NULLS LAST
         LIMIT $5;
       `;
       
       const globalResult = await query(globalQuery, [lat, lng, userId, excludeIds, remaining]);
       users = [...users, ...globalResult.rows];
-      console.log(`[Feed] Step 2 - Global: added ${globalResult.rows.length} users, total now ${users.length}`);
+      sources.global = globalResult.rows.length;
+      
+      console.log(`[Feed] Step 2 Result: ${globalResult.rows.length} global users added, total=${users.length}`);
     }
     
     // =========================================
-    // STEP 3: Resurrection - Reset PASS swipes if still < MIN_FEED_SIZE
+    // STEP 3: RESURRECTION PROTOCOL
+    // If still < MIN_FEED_SIZE, resurrect PASS'd users
+    // Delete their PASS swipes and return them
     // =========================================
-    if (users.length < MIN_FEED_SIZE && offset === 0) {
-      source = 'resurrected';
+    if (users.length < MIN_FEED_SIZE) {
+      console.log(`[Feed] Step 3: Resurrection Protocol (total=${users.length} < ${MIN_FEED_SIZE})`);
+      
       const remaining = limit - users.length;
       const excludeIds = users.map(u => u.id);
       
-      // Find users who were PASSed (not LIKE or SUPERLIKE)
-      // These are candidates for resurrection
-      const passedUsersQuery = `
-        SELECT target_id 
-        FROM swipes 
-        WHERE actor_id = $1 
-          AND action = 'PASS'
-          -- Exclude users who are already matched (mutual like)
-          AND target_id NOT IN (
-            SELECT CASE 
-              WHEN user_a = $1 THEN user_b 
-              ELSE user_a 
-            END
-            FROM relationships
-            WHERE user_a = $1 OR user_b = $1
+      // Find users who were PASSed (oldest first, so they come back naturally)
+      const findPassedQuery = `
+        SELECT s.target_id
+        FROM swipes s
+        INNER JOIN users u ON u.id = s.target_id
+        WHERE s.actor_id = $1
+          AND s.action = 'PASS'
+          AND u.is_active = TRUE
+          AND s.target_id != ALL($2::uuid[])
+          -- Don't resurrect users who are already matched
+          AND NOT EXISTS (
+            SELECT 1 FROM relationships r
+            WHERE (r.user_a = $1 AND r.user_b = s.target_id)
+               OR (r.user_b = $1 AND r.user_a = s.target_id)
           )
-        ORDER BY created_at ASC
-        LIMIT $2;
+        ORDER BY s.created_at ASC
+        LIMIT $3;
       `;
       
-      const passedResult = await query(passedUsersQuery, [userId, remaining]);
+      const passedResult = await query(findPassedQuery, [userId, excludeIds, remaining]);
       const passedUserIds = passedResult.rows.map(r => r.target_id);
       
       if (passedUserIds.length > 0) {
-        // Reset these PASS swipes (delete them)
+        console.log(`[Feed] Resurrecting ${passedUserIds.length} passed users...`);
+        
+        // DELETE their PASS swipes (give them a second chance)
         await query(`
           DELETE FROM swipes 
           WHERE actor_id = $1 
             AND action = 'PASS'
-            AND target_id = ANY($2::uuid[]);
+            AND target_id = ANY($2::uuid[])
         `, [userId, passedUserIds]);
         
         resurrectedCount = passedUserIds.length;
@@ -195,133 +207,40 @@ async function getFeed(req, res, next) {
         // Fetch the resurrected users
         const resurrectedQuery = `
           SELECT 
-            u.id,
-            u.telegram_id,
-            u.username,
-            u.display_name,
-            u.bio,
-            u.avatar_url,
-            u.wallet_rank,
-            u.market_price,
-            u.price_change_24h,
-            u.boosted_until,
-            CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
+            ${getUserSelectFields()},
             CASE 
               WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
               THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
-              ELSE NULL
+              ELSE 999.0
             END AS distance_km,
             'resurrected' AS source
           FROM users u
           WHERE u.id = ANY($3::uuid[])
             AND u.is_active = TRUE
-            AND u.id != ALL($4::uuid[])
-          ORDER BY 
-            CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END ASC,
-            u.boosted_until DESC NULLS LAST,
-            u.market_price DESC;
+          ORDER BY u.market_price DESC;
         `;
         
-        const resurrectedResult = await query(resurrectedQuery, [lat, lng, passedUserIds, excludeIds]);
+        const resurrectedResult = await query(resurrectedQuery, [lat, lng, passedUserIds]);
         users = [...users, ...resurrectedResult.rows];
-        console.log(`[Feed] Step 3 - Resurrection: resurrected ${resurrectedResult.rows.length} users, total now ${users.length}`);
+        sources.resurrected = resurrectedResult.rows.length;
+        
+        console.log(`[Feed] Step 3 Result: ${resurrectedResult.rows.length} users resurrected, total=${users.length}`);
       }
     }
     
     // =========================================
-    // STEP 4: VIP Injection - Mix in 1-2 VIP profiles
-    // VIPs are excluded if already swiped (no duplicates)
-    // =========================================
-    const vipQuery = `
-      SELECT 
-        u.id,
-        u.telegram_id,
-        u.username,
-        u.display_name,
-        u.bio,
-        u.avatar_url,
-        u.wallet_rank,
-        u.market_price,
-        u.price_change_24h,
-        u.boosted_until,
-        CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
-        CASE 
-          WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
-          THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
-          ELSE 5.0 -- Default distance for VIPs
-        END AS distance_km,
-        'vip' AS source
-      FROM users u
-      WHERE u.is_vip = TRUE
-        AND u.is_active = TRUE
-        AND u.id != $3
-        -- Exclude VIPs already in current results
-        AND u.id != ALL($4::uuid[])
-        -- Exclude VIPs already swiped by user
-        AND u.id NOT IN (
-          SELECT target_id 
-          FROM swipes 
-          WHERE actor_id = $3
-        )
-      ORDER BY RANDOM()
-      LIMIT $5;
-    `;
-    
-    const existingIds = users.map(u => u.id);
-    const vipResult = await query(vipQuery, [lat, lng, userId, existingIds, VIP_INJECT_COUNT]);
-    console.log(`[Feed] Step 4 - VIP: found ${vipResult.rows.length} VIP users`);
-    
-    if (vipResult.rows.length > 0) {
-      // Update VIP last_active_at to NOW (always online)
-      const vipIds = vipResult.rows.map(v => v.id);
-      await query(`
-        UPDATE users 
-        SET last_active_at = NOW() 
-        WHERE id = ANY($1::uuid[]);
-      `, [vipIds]);
-      
-      // Shuffle VIPs into random positions in the feed
-      const vips = vipResult.rows;
-      vips.forEach(vip => {
-        // Insert at random position (not first, to feel more natural)
-        const minPos = Math.min(1, users.length);
-        const maxPos = users.length;
-        const randomPos = Math.floor(Math.random() * (maxPos - minPos + 1)) + minPos;
-        users.splice(randomPos, 0, vip);
-      });
-    }
-    
-    // Get total available count (for pagination info)
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM users u
-      WHERE u.id != $1
-        AND u.is_active = TRUE
-        AND u.id NOT IN (
-          SELECT target_id FROM swipes WHERE actor_id = $1
-        );
-    `;
-    
-    const countResult = await query(countQuery, [userId]);
-    const totalAvailable = parseInt(countResult.rows[0].total);
-    
-    // =========================================
-    // STEP 5: Enrich users with chart_data (last 20 prices)
+    // STEP 4: ENRICH with chart data
     // =========================================
     if (users.length > 0) {
       const userIds = users.map(u => u.id);
       
-      // Fetch chart data for all users in one query
       const chartQuery = `
         SELECT 
           user_id,
           ARRAY_AGG(price ORDER BY recorded_at ASC) AS chart_data
         FROM (
-          SELECT 
-            user_id,
-            price,
-            recorded_at,
-            ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY recorded_at DESC) AS rn
+          SELECT user_id, price, recorded_at,
+                 ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY recorded_at DESC) AS rn
           FROM price_history
           WHERE user_id = ANY($1::uuid[])
         ) sub
@@ -330,62 +249,43 @@ async function getFeed(req, res, next) {
       `;
       
       const chartResult = await query(chartQuery, [userIds]);
-      
-      // Create a map of user_id -> chart_data
-      const chartDataMap = {};
-      for (const row of chartResult.rows) {
-        chartDataMap[row.user_id] = row.chart_data || [];
-      }
+      const chartMap = new Map(chartResult.rows.map(r => [r.user_id, r.chart_data]));
       
       // Enrich users with chart_data
       users = users.map(user => ({
         ...user,
-        chart_data: chartDataMap[user.id] || [user.market_price], // Fallback to current price if no history
+        chart_data: chartMap.get(user.id) || [user.market_price],
       }));
     }
     
-    // Count by source
-    const sourceBreakdown = {
-      nearby: users.filter(u => u.source === 'nearby').length,
-      global: users.filter(u => u.source === 'global').length,
-      resurrected: users.filter(u => u.source === 'resurrected').length,
-      vip: users.filter(u => u.source === 'vip').length,
-      boosted: users.filter(u => u.is_boosted).length,
-    };
+    // =========================================
+    // RESPONSE
+    // =========================================
+    const elapsed = Date.now() - startTime;
+    console.log(`[Feed] Complete: ${users.length} users in ${elapsed}ms (local=${sources.local}, global=${sources.global}, resurrected=${sources.resurrected})`);
     
     res.json({
       success: true,
-      data: {
-        users: users,
-        pagination: {
-          total: totalAvailable + resurrectedCount,
-          limit,
-          offset,
-          hasMore: totalAvailable > 0 || resurrectedCount > 0,
-        },
-        search: {
-          radiusKm,
-          coordinates: { lat, lng },
-        },
-        meta: {
-          source,
-          breakdown: sourceBreakdown,
-          resurrectedCount,
-          message: resurrectedCount > 0 
-            ? `Brought back ${resurrectedCount} profiles you previously passed` 
-            : null,
-        },
+      users: users,
+      meta: {
+        total: users.length,
+        sources,
+        resurrectedCount,
+        radiusKm,
+        elapsed: `${elapsed}ms`,
+        hasMore: users.length >= MIN_FEED_SIZE,
       },
     });
+    
   } catch (err) {
+    console.error('[Feed] Error:', err);
     next(err);
   }
 }
 
-/**
- * GET /feed/stats
- * Get feed statistics for current user
- */
+// ============================================
+// GET /feed/stats - Feed statistics
+// ============================================
 async function getFeedStats(req, res, next) {
   try {
     const userId = req.user.id;
@@ -396,26 +296,27 @@ async function getFeedStats(req, res, next) {
         (SELECT COUNT(*) FROM swipes WHERE actor_id = $1) as total_swiped,
         (SELECT COUNT(*) FROM swipes WHERE actor_id = $1 AND action = 'LIKE') as total_likes,
         (SELECT COUNT(*) FROM swipes WHERE actor_id = $1 AND action = 'PASS') as total_passes,
-        (SELECT COUNT(*) FROM swipes WHERE actor_id = $1 AND action = 'SUPERLIKE') as total_superlikes,
-        (SELECT COUNT(*) FROM matches WHERE user1_id = $1 OR user2_id = $1) as total_matches;
+        (SELECT COUNT(*) FROM relationships WHERE user_a = $1 OR user_b = $1) as total_matches,
+        (
+          SELECT COUNT(*) FROM users u
+          WHERE u.is_active = TRUE AND u.id != $1
+            AND NOT EXISTS (SELECT 1 FROM swipes s WHERE s.actor_id = $1 AND s.target_id = u.id)
+        ) as available_to_swipe;
     `;
     
     const result = await query(statsQuery, [userId]);
     const stats = result.rows[0];
     
-    const unswiped = parseInt(stats.total_users) - parseInt(stats.total_swiped);
-    
     res.json({
       success: true,
-      data: {
+      stats: {
         totalUsers: parseInt(stats.total_users),
         totalSwiped: parseInt(stats.total_swiped),
-        unswiped: unswiped,
-        likes: parseInt(stats.total_likes),
-        passes: parseInt(stats.total_passes),
-        superlikes: parseInt(stats.total_superlikes),
-        matches: parseInt(stats.total_matches),
-        canResurrect: parseInt(stats.total_passes) > 0 && unswiped < MIN_FEED_SIZE,
+        totalLikes: parseInt(stats.total_likes),
+        totalPasses: parseInt(stats.total_passes),
+        totalMatches: parseInt(stats.total_matches),
+        availableToSwipe: parseInt(stats.available_to_swipe),
+        canResurrect: parseInt(stats.total_passes), // PASS'd users can be resurrected
       },
     });
   } catch (err) {
@@ -423,215 +324,113 @@ async function getFeedStats(req, res, next) {
   }
 }
 
-/**
- * POST /feed/resurrect
- * Manually trigger resurrection of passed profiles
- */
+// ============================================
+// GET /feed/trending - Top profiles by market cap
+// ============================================
+async function getTrending(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    
+    const trendingQuery = `
+      SELECT 
+        ${getUserSelectFields()},
+        NULL AS distance_km,
+        'trending' AS source
+      FROM users u
+      WHERE u.is_active = TRUE
+        AND u.id != $1
+      ORDER BY 
+        u.price_change_24h DESC,
+        u.market_price DESC
+      LIMIT $2;
+    `;
+    
+    const result = await query(trendingQuery, [userId, limit]);
+    
+    res.json({
+      success: true,
+      users: result.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ============================================
+// POST /feed/resurrect - Manually resurrect PASS'd users
+// ============================================
 async function resurrectPasses(req, res, next) {
   try {
     const userId = req.user.id;
-    const limit = parseInt(req.body.limit) || 10;
+    const limit = Math.min(parseInt(req.body.limit) || 10, 50);
     
-    // Find and delete PASS swipes (oldest first)
-    const result = await query(`
-      WITH deleted AS (
-        DELETE FROM swipes 
-        WHERE id IN (
-          SELECT id FROM swipes 
-          WHERE actor_id = $1 
-            AND action = 'PASS'
-            -- Don't resurrect matched users
-            AND target_id NOT IN (
-              SELECT CASE 
-                WHEN user1_id = $1 THEN user2_id 
-                ELSE user1_id 
-              END
-              FROM matches
-              WHERE user1_id = $1 OR user2_id = $1
-            )
-          ORDER BY created_at ASC
-          LIMIT $2
-        )
-        RETURNING target_id
+    // Delete oldest PASS swipes
+    const deleteQuery = `
+      DELETE FROM swipes 
+      WHERE id IN (
+        SELECT id FROM swipes 
+        WHERE actor_id = $1 AND action = 'PASS'
+        ORDER BY created_at ASC
+        LIMIT $2
       )
-      SELECT COUNT(*) as resurrected_count FROM deleted;
-    `, [userId, limit]);
+      RETURNING target_id;
+    `;
     
-    const resurrectedCount = parseInt(result.rows[0].resurrected_count);
+    const result = await query(deleteQuery, [userId, limit]);
+    const resurrectedCount = result.rows.length;
+    
+    console.log(`[Feed] Manually resurrected ${resurrectedCount} users for ${userId}`);
     
     res.json({
       success: true,
-      data: {
-        resurrectedCount,
-        message: resurrectedCount > 0 
-          ? `${resurrectedCount} profiles have been brought back to your feed!`
-          : 'No profiles to resurrect',
-      },
+      resurrectedCount,
+      message: `${resurrectedCount} profiles are now available again!`,
     });
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * GET /feed/trending
- * Get top users by market price (global leaderboard)
- */
-async function getTrending(req, res, next) {
-  try {
-    const limit = parseInt(req.query.limit) || 20;
-    
-    const result = await query(`
-      SELECT 
-        id,
-        telegram_id,
-        username,
-        display_name,
-        avatar_url,
-        wallet_rank,
-        market_price,
-        price_change_24h,
-        RANK() OVER (ORDER BY market_price DESC) as rank
-      FROM users
-      WHERE is_active = TRUE
-      ORDER BY market_price DESC
-      LIMIT $1;
-    `, [limit]);
-    
-    res.json({
-      success: true,
-      data: result.rows,
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * GET /feed/debug
- * Debug endpoint to check database status
- */
+// ============================================
+// GET /feed/debug - Debug endpoint (no auth)
+// ============================================
 async function debugFeed(req, res, next) {
   try {
-    const userId = req.user?.id || null;
-    // Allow testing with specific telegram_id via query param
-    const testTelegramId = req.query.telegram_id;
-    
-    // Check total users
-    const totalUsersResult = await query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE');
-    const totalUsers = parseInt(totalUsersResult.rows[0].count);
-    
-    // Check VIP users
-    const vipUsersResult = await query('SELECT COUNT(*) as count FROM users WHERE is_vip = TRUE');
-    const vipUsers = parseInt(vipUsersResult.rows[0].count);
-    
-    // Check users with location
-    const usersWithLocationResult = await query(
-      'SELECT COUNT(*) as count FROM users WHERE latitude IS NOT NULL AND longitude IS NOT NULL'
-    );
-    const usersWithLocation = parseInt(usersWithLocationResult.rows[0].count);
-    
-    // Check if calculate_distance_km function exists
-    let functionExists = false;
-    try {
-      await query('SELECT calculate_distance_km(10.0, 106.0, 10.1, 106.1)');
-      functionExists = true;
-    } catch (e) {
-      functionExists = false;
-    }
-    
-    // If telegram_id provided, find user and simulate feed
-    let testUserInfo = null;
-    let testFeedResult = null;
-    if (testTelegramId) {
-      const userResult = await query('SELECT id, telegram_id, display_name FROM users WHERE telegram_id = $1', [testTelegramId]);
-      if (userResult.rows.length > 0) {
-        const testUser = userResult.rows[0];
-        testUserInfo = testUser;
-        
-        // Count swipes for this user
-        const swipesResult = await query('SELECT COUNT(*) as count FROM swipes WHERE actor_id = $1', [testUser.id]);
-        const swipeCount = parseInt(swipesResult.rows[0].count);
-        
-        // Try to get feed for this user
-        const feedQuery = `
-          SELECT 
-            u.id,
-            u.telegram_id,
-            u.display_name,
-            u.wallet_rank,
-            u.market_price,
-            u.is_vip,
-            ROUND(calculate_distance_km(10.8231, 106.6297, u.latitude, u.longitude)::numeric, 2) AS distance_km
-          FROM users u
-          WHERE u.id != $1
-            AND u.is_active = TRUE
-            AND u.latitude IS NOT NULL
-            AND u.longitude IS NOT NULL
-            AND u.id NOT IN (
-              SELECT target_id 
-              FROM swipes 
-              WHERE actor_id = $1
-            )
-          ORDER BY u.market_price DESC
-          LIMIT 10;
-        `;
-        const feedResult = await query(feedQuery, [testUser.id]);
-        
-        testFeedResult = {
-          userId: testUser.id,
-          displayName: testUser.display_name,
-          swipeCount,
-          availableProfiles: feedResult.rows.length,
-          profiles: feedResult.rows,
-        };
-      }
-    }
-    
-    // Check swipes count for authenticated user
-    let userSwipes = 0;
-    if (userId) {
-      const swipesResult = await query('SELECT COUNT(*) as count FROM swipes WHERE actor_id = $1', [userId]);
-      userSwipes = parseInt(swipesResult.rows[0].count);
-    }
-    
-    // Get sample users
-    const sampleUsersResult = await query(`
-      SELECT id, telegram_id, display_name, wallet_rank, market_price, is_vip, 
-             latitude, longitude, is_active
-      FROM users 
-      ORDER BY created_at DESC 
-      LIMIT 10
+    const stats = await query(`
+      SELECT 
+        (SELECT COUNT(*) FROM users WHERE is_active = TRUE) as total_users,
+        (SELECT COUNT(*) FROM swipes) as total_swipes,
+        (SELECT COUNT(*) FROM swipes WHERE action = 'LIKE') as total_likes,
+        (SELECT COUNT(*) FROM swipes WHERE action = 'PASS') as total_passes,
+        (SELECT COUNT(*) FROM relationships) as total_matches;
     `);
     
-    // Get total swipes in system
-    const totalSwipesResult = await query('SELECT COUNT(*) as count FROM swipes');
-    const totalSwipes = parseInt(totalSwipesResult.rows[0].count);
+    const recentUsers = await query(`
+      SELECT id, username, display_name, market_price, is_active, created_at
+      FROM users 
+      ORDER BY created_at DESC 
+      LIMIT 10;
+    `);
     
     res.json({
       success: true,
-      debug: {
-        totalUsers,
-        vipUsers,
-        usersWithLocation,
-        totalSwipes,
-        functionExists,
-        currentUserId: userId,
-        userSwipes,
-        testUserInfo,
-        testFeedResult,
-        sampleUsers: sampleUsersResult.rows,
-      },
+      stats: stats.rows[0],
+      recentUsers: recentUsers.rows,
+      timestamp: new Date().toISOString(),
     });
   } catch (err) {
     next(err);
   }
 }
 
+// ============================================
+// EXPORTS
+// ============================================
 module.exports = {
   getFeed,
   getFeedStats,
-  resurrectPasses,
   getTrending,
+  resurrectPasses,
   debugFeed,
 };

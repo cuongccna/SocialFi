@@ -42,14 +42,27 @@ async function resetSwipes() {
     const swipeCount = parseInt(countResult.rows[0].count);
     console.log(`📊 Current swipes: ${swipeCount}`);
     
-    // Delete PASS swipes (keep LIKE swipes to preserve matches)
-    const deleteResult = await pool.query(
-      `DELETE FROM swipes WHERE actor_id = $1 AND action = 'PASS' RETURNING id`,
-      [user.id]
-    );
+    // Check for --all flag
+    const resetAll = process.argv[3] === '--all';
     
-    console.log(`✅ Deleted ${deleteResult.rowCount} PASS swipes`);
-    console.log('💡 LIKE swipes preserved to keep matches');
+    if (resetAll) {
+      // Delete ALL swipes (including LIKE - will break matches!)
+      const deleteResult = await pool.query(
+        `DELETE FROM swipes WHERE actor_id = $1 RETURNING id`,
+        [user.id]
+      );
+      console.log(`⚠️  Deleted ALL ${deleteResult.rowCount} swipes (including LIKE)`);
+      console.log('🔥 Warning: This may affect existing matches!');
+    } else {
+      // Delete only PASS swipes (keep LIKE swipes to preserve matches)
+      const deleteResult = await pool.query(
+        `DELETE FROM swipes WHERE actor_id = $1 AND action = 'PASS' RETURNING id`,
+        [user.id]
+      );
+      console.log(`✅ Deleted ${deleteResult.rowCount} PASS swipes`);
+      console.log('💡 LIKE swipes preserved to keep matches');
+      console.log('💡 Use --all flag to reset ALL swipes: node scripts/reset-swipes.js <id> --all');
+    }
     
     // Show remaining
     const remainingResult = await pool.query(
