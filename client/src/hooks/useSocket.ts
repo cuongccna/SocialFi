@@ -5,7 +5,21 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3005';
+// Detect socket URL based on environment
+const getSocketUrl = () => {
+  // If VITE_API_URL is set, use it
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL.replace('/api', '');
+  }
+  // In production (not localhost), use current origin
+  if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+    return window.location.origin;
+  }
+  // Local development
+  return 'http://localhost:3005';
+};
+
+const SOCKET_URL = getSocketUrl();
 
 interface Message {
   id: number;

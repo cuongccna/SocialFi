@@ -16,6 +16,7 @@ export default function ProfilePage() {
   const [showUploadTooltip, setShowUploadTooltip] = useState(false);
   const [isBoosting, setIsBoosting] = useState(false);
   const [boostMessage, setBoostMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showBoostConfirm, setShowBoostConfirm] = useState(false);
   
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false);
@@ -59,9 +60,27 @@ export default function ProfilePage() {
     }
   };
 
-  // Handle boost profile
+  // Handle boost profile - show confirmation first
+  const handleBoostClick = () => {
+    // Check balance before showing confirm
+    const balance = user?.balance_love || 0;
+    if (balance < 500) {
+      haptic.notification('error');
+      setBoostMessage({ 
+        type: 'error', 
+        text: `💰 Insufficient $LOVE balance. Need 500 $LOVE, you have ${balance.toFixed(0)} $LOVE.` 
+      });
+      setTimeout(() => setBoostMessage(null), 6000);
+      return;
+    }
+    setShowBoostConfirm(true);
+    haptic.impact('light');
+  };
+
+  // Confirm boost
   const handleBoost = async () => {
     if (isBoosting) return;
+    setShowBoostConfirm(false);
     
     try {
       setIsBoosting(true);
@@ -83,11 +102,28 @@ export default function ProfilePage() {
       setTimeout(() => setBoostMessage(null), 5000);
     } catch (err: any) {
       haptic.notification('error');
-      setBoostMessage({ 
-        type: 'error', 
-        text: err.response?.data?.message || 'Failed to boost profile' 
-      });
-      setTimeout(() => setBoostMessage(null), 5000);
+      console.error('Boost error:', err.response?.data || err);
+      
+      // Parse error message với các case cụ thể
+      let errorMessage = 'Failed to boost profile';
+      const serverMessage = err.response?.data?.message;
+      
+      if (serverMessage) {
+        if (serverMessage.includes('already boosted')) {
+          errorMessage = `⏳ ${serverMessage}`;
+        } else if (serverMessage.includes('Insufficient')) {
+          errorMessage = `💰 ${serverMessage}`;
+        } else {
+          errorMessage = serverMessage;
+        }
+      } else if (err.response?.status === 400) {
+        errorMessage = '❌ Cannot boost right now. Check your balance or wait for cooldown.';
+      } else if (!err.response) {
+        errorMessage = '🌐 Network error. Please check your connection.';
+      }
+      
+      setBoostMessage({ type: 'error', text: errorMessage });
+      setTimeout(() => setBoostMessage(null), 8000);
     } finally {
       setIsBoosting(false);
     }
@@ -433,7 +469,7 @@ export default function ProfilePage() {
 
           {/* Pump Profile Button */}
           <motion.button
-            onClick={handleBoost}
+            onClick={handleBoostClick}
             disabled={isBoosting || !!isBoosted}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -647,6 +683,68 @@ export default function ProfilePage() {
         onChange={handleFileSelect}
         className="hidden"
       />
+
+      {/* Boost Confirmation Modal */}
+      <AnimatePresence>
+        {showBoostConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setShowBoostConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="card p-6 max-w-sm w-full text-center"
+            >
+              <div className="text-5xl mb-4">🚀</div>
+              <h3 className="text-xl font-bold mb-2">Pump Profile?</h3>
+              <p className="text-white/70 mb-4">
+                This will cost <span className="text-primary font-bold">500 $LOVE</span> and give you:
+              </p>
+              <div className="bg-white/5 rounded-xl p-4 mb-4 space-y-2 text-left">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-neon-green" />
+                  <span>+10% Market Price</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-neon-yellow" />
+                  <span>Top of feed for 30 minutes</span>
+                </div>
+              </div>
+              <div className="text-sm text-white/50 mb-4">
+                Your balance: <span className="text-primary">{formatNumber(user?.balance_love || 0)} $LOVE</span>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowBoostConfirm(false)}
+                  className="flex-1 py-3 rounded-xl bg-white/10 font-medium hover:bg-white/20 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBoost}
+                  disabled={isBoosting}
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-primary to-neon-green text-dark font-bold flex items-center justify-center gap-2"
+                >
+                  {isBoosting ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Rocket className="w-5 h-5" />
+                      Pump!
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

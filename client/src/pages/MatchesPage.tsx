@@ -211,11 +211,33 @@ export default function MatchesPage() {
       setTimeout(() => setFudMessage(null), 5000);
     } catch (err: any) {
       haptic.notification('error');
-      setFudMessage({ 
-        type: 'error', 
-        text: err.response?.data?.message || 'Failed to FUD user' 
-      });
-      setTimeout(() => setFudMessage(null), 5000);
+      console.error('FUD error:', err.response?.data || err);
+      
+      // Parse error message với các case cụ thể
+      let errorMessage = 'Failed to FUD user';
+      const serverMessage = err.response?.data?.message;
+      
+      if (serverMessage) {
+        if (serverMessage.includes('cooldown')) {
+          // Extract hours remaining from message
+          errorMessage = `⏳ ${serverMessage}`;
+        } else if (serverMessage.includes('only FUD users you are matched')) {
+          errorMessage = `❌ ${serverMessage}`;
+        } else if (serverMessage.includes('Cannot FUD yourself')) {
+          errorMessage = `🙈 ${serverMessage}`;
+        } else {
+          errorMessage = serverMessage;
+        }
+      } else if (err.response?.status === 429) {
+        errorMessage = '⏳ FUD cooldown active. You can only FUD each match once per 24 hours.';
+      } else if (err.response?.status === 403) {
+        errorMessage = '❌ You can only FUD users you are matched with.';
+      } else if (!err.response) {
+        errorMessage = '🌐 Network error. Please check your connection.';
+      }
+      
+      setFudMessage({ type: 'error', text: errorMessage });
+      setTimeout(() => setFudMessage(null), 8000);
     } finally {
       setFudingId(null);
     }
