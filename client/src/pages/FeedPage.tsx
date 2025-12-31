@@ -92,6 +92,9 @@ export default function FeedPage() {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false); // Prevent button spam
   
+  // Track swiped user IDs to filter them from prefetch results
+  const swipedIdsRef = useRef<Set<string>>(new Set());
+  
   // Particle effect states
   const [showLongParticles, setShowLongParticles] = useState(false);
   const [showShortParticles, setShowShortParticles] = useState(false);
@@ -148,6 +151,9 @@ export default function FeedPage() {
   ) => {
     const action = direction === 'right' ? 'LONG' : 'SHORT';
     console.log(`📊 ${action} on:`, profile.display_name, `($${profile.market_price})`, swipeInfo);
+    
+    // Track swiped user ID to filter from future prefetches
+    swipedIdsRef.current.add(profile.id);
     
     setSwipeCount(prev => prev + 1);
     setIsProcessing(true);
@@ -284,7 +290,10 @@ export default function FeedPage() {
         setUsers(prev => {
           // Filter out duplicates (already in current list)
           const existingIds = new Set(prev.map(u => u.id));
-          const newUsers = feedUsers.filter(u => !existingIds.has(u.id));
+          // Also filter out users we've already swiped in this session
+          const newUsers = feedUsers.filter(u => 
+            !existingIds.has(u.id) && !swipedIdsRef.current.has(u.id)
+          );
           console.log(`📥 Got ${feedUsers.length} users, ${newUsers.length} new`);
           return [...prev, ...newUsers];
         });

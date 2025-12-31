@@ -226,8 +226,8 @@ async function getFeed(req, res, next) {
     }
     
     // =========================================
-    // STEP 4: VIP Injection - Always mix in 1-2 VIP profiles
-    // VIPs appear even if user already swiped them (they "updated profile")
+    // STEP 4: VIP Injection - Mix in 1-2 VIP profiles
+    // VIPs are excluded if already swiped (no duplicates)
     // =========================================
     const vipQuery = `
       SELECT 
@@ -254,6 +254,12 @@ async function getFeed(req, res, next) {
         AND u.id != $3
         -- Exclude VIPs already in current results
         AND u.id != ALL($4::uuid[])
+        -- Exclude VIPs already swiped by user
+        AND u.id NOT IN (
+          SELECT target_id 
+          FROM swipes 
+          WHERE actor_id = $3
+        )
       ORDER BY RANDOM()
       LIMIT $5;
     `;
