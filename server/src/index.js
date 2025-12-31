@@ -64,9 +64,14 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Static files
+// Static files - serve from project root /public folder
+// This handles /public/certificates/, /public/avatars/, etc.
 const publicPath = path.join(__dirname, '../../public');
-app.use('/public', express.static(publicPath));
+console.log('📂 Static files path:', publicPath);
+app.use('/public', express.static(publicPath, {
+  maxAge: '1y',
+  etag: true,
+}));
 console.log('📂 Static files being served at /public');
 
 // Request logging (development)
