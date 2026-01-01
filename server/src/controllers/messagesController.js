@@ -153,6 +153,32 @@ async function sendMessage(req, res, next) {
       ).catch(err => console.warn('Bot relay failed:', err.message));
     }
 
+    // ==========================================
+    // REAL-TIME SOCKET EMIT
+    // ==========================================
+    const io = req.app.get('io');
+    if (io) {
+      const roomName = `relationship_${matchId}`;
+      const socketMessage = {
+        ...message,
+        sender_name: sender.rows[0].display_name,
+        sender_avatar: sender.rows[0].avatar_url,
+      };
+      
+      io.to(roomName).emit('receive_message', socketMessage);
+      
+      // Also emit balance update
+      io.to(roomName).emit('update_balance', {
+        relationship_id: matchId,
+        joint_balance: newJointBalance,
+        increment: rewardAmount,
+      });
+      
+      console.log(`[Socket] Emitted message to room ${roomName}`);
+    } else {
+      console.warn('[Socket] IO instance not found in request');
+    }
+
     res.status(201).json({
       success: true,
       message: {

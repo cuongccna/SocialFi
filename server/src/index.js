@@ -47,6 +47,9 @@ const io = new Server(server, {
   },
 });
 
+// Make io accessible to our router
+app.set('io', io);
+
 // ============================================
 // Middleware Stack
 // ============================================
