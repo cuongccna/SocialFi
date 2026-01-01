@@ -59,6 +59,9 @@ const getUserSelectFields = (includeDistance = true) => `
 // ============================================
 async function getFeed(req, res, next) {
   const startTime = Date.now();
+  console.log('================================================================');
+  console.log(`[Feed] Request received from user ${req.user.id} | v2.0 GENESIS PROTOCOL`);
+  console.log('================================================================');
   
   try {
     const userId = req.user.id;
@@ -514,6 +517,7 @@ async function getFeed(req, res, next) {
 async function getFeedStats(req, res, next) {
   try {
     const userId = req.user.id;
+    console.log(`[FeedStats] Request for user ${userId}`);
     
     const statsQuery = `
       SELECT 
