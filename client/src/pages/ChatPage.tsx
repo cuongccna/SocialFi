@@ -46,14 +46,18 @@ export default function ChatPage() {
 
   // Real-time socket connection
   const handleNewMessage = useCallback((message: Message) => {
+    console.log('💬 ChatPage received message:', message);
     // Only add if not from current user (already added optimistically)
-    if (message.sender_id !== user?.id) {
+    if (String(message.sender_id) !== String(user?.id)) {
+      console.log('📥 Adding message to list');
       setMessages(prev => [...prev, message]);
       haptic.notification('success');
       // Scroll to bottom
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
+    } else {
+      console.log('🚫 Ignoring own message');
     }
   }, [user?.id]);
 

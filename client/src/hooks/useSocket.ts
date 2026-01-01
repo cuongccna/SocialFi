@@ -48,6 +48,14 @@ export function useSocket(options: UseSocketOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [typingUsers, setTypingUsers] = useState<number[]>([]);
 
+  // Store options in ref to avoid stale closures in event listeners
+  const optionsRef = useRef(options);
+  
+  // Update ref whenever options change
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
   // Initialize socket connection
   useEffect(() => {
     if (!user) return;
@@ -94,30 +102,31 @@ export function useSocket(options: UseSocketOptions = {}) {
 
     // Listen for incoming messages
     const handleMessage = (message: Message) => {
-      options.onMessage?.(message);
+      console.log('🔌 Socket received message:', message);
+      optionsRef.current.onMessage?.(message);
     };
 
     // Listen for typing indicators
     const handleTypingStart = ({ userId }: { userId: number }) => {
       if (String(userId) !== String(user.id)) {
         setTypingUsers((prev) => [...new Set([...prev, userId])]);
-        options.onTyping?.({ userId, isTyping: true });
+        optionsRef.current.onTyping?.({ userId, isTyping: true });
       }
     };
 
     const handleTypingStop = ({ userId }: { userId: number }) => {
       setTypingUsers((prev) => prev.filter((id) => id !== userId));
-      options.onTyping?.({ userId, isTyping: false });
+      optionsRef.current.onTyping?.({ userId, isTyping: false });
     };
 
     // Listen for balance updates (Joint Venture)
     const handleBalanceUpdate = (data: { joint_balance: number }) => {
-      options.onBalanceUpdate?.(data);
+      optionsRef.current.onBalanceUpdate?.(data);
     };
 
     // Listen for read receipts
     const handleMessagesRead = (data: { userId: number }) => {
-      options.onMessagesRead?.(data);
+      optionsRef.current.onMessagesRead?.(data);
     };
 
     socket.on('receive_message', handleMessage);
