@@ -91,6 +91,7 @@ export default function FeedPage() {
   const [swipeCount, setSwipeCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false); // Prevent button spam
+  const [feedKey, setFeedKey] = useState(0); // Key to force re-render of CardStack on refresh
   
   // Track swiped user IDs to filter them from prefetch results
   const swipedIdsRef = useRef<Set<string>>(new Set());
@@ -133,6 +134,7 @@ export default function FeedPage() {
         setIsEmpty(true);
       } else {
         setUsers(feedUsers);
+        setFeedKey(prev => prev + 1); // Reset CardStack
         setIsEmpty(false);
       }
     } catch (err) {
@@ -158,8 +160,8 @@ export default function FeedPage() {
     setSwipeCount(prev => prev + 1);
     setIsProcessing(true);
     
-    // Remove user from local state immediately to prevent duplicate swipes
-    setUsers(prev => prev.filter(u => u.id !== profile.id));
+    // DO NOT remove user from local state here - CardStack handles the index!
+    // setUsers(prev => prev.filter(u => u.id !== profile.id));
     
     try {
       // Call API to record swipe with mystery/vip flags
@@ -223,6 +225,7 @@ export default function FeedPage() {
 
         if (feedUsers.length > 0) {
           setUsers(feedUsers);
+          setFeedKey(prev => prev + 1); // Reset CardStack
           setIsEmpty(false);
           setSwipeCount(0);
           setRadiusMessage(null);
@@ -261,6 +264,7 @@ export default function FeedPage() {
         }
       } else {
         setUsers(feedUsers);
+        setFeedKey(prev => prev + 1); // Reset CardStack
         setIsEmpty(false);
         setSwipeCount(0);
         setRadiusMessage(null);
@@ -412,6 +416,7 @@ export default function FeedPage() {
       {/* Card Stack Area */}
       <div className="flex-1 relative overflow-hidden">
         <CardStack
+          key={feedKey} // Force re-render on full refresh
           ref={cardStackRef}
           profiles={users}
           onSwipe={handleSwipe}
