@@ -122,6 +122,7 @@ export default function FeedPage() {
     try {
       setIsLoading(true);
       setError(null);
+      console.log('🚀 Loading feed...');
 
       const feedUsers = await getFeed(
         user?.latitude || undefined,
@@ -129,10 +130,14 @@ export default function FeedPage() {
         10, // radius in km
         20  // limit
       );
+      
+      console.log(`📥 Received ${feedUsers.length} users from API`);
 
       if (feedUsers.length === 0) {
+        console.log('⚠️ Feed is empty');
         setIsEmpty(true);
       } else {
+        console.log('✅ Setting users state');
         setUsers(feedUsers);
         setFeedKey(prev => prev + 1); // Reset CardStack
         setIsEmpty(false);
@@ -215,6 +220,10 @@ export default function FeedPage() {
     if (searchRadius >= 500) {
       setSearchRadius(10); // Reset to initial radius
       setRadiusMessage("Starting fresh! Let's find you new matches! 🔄");
+      
+      // Clear local swipe history to allow re-swiping
+      swipedIdsRef.current.clear();
+      console.log('🧹 Cleared local swipe history');
       
       try {
         const feedUsers = await refreshFeed(

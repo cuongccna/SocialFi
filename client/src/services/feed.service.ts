@@ -28,12 +28,13 @@ export async function getFeed(
   if (latitude) params.lat = latitude;
   if (longitude) params.lng = longitude;
 
-  const response = await api.get<{ success: boolean; data: { users: FeedUser[] } }>(
+  const response = await api.get<{ success: boolean; users: FeedUser[] }>(
     '/feed',
     { params }
   );
 
-  // Backend returns { success: true, data: { users: [...] } }
+  // Backend returns { success: true, users: [...], meta: ... }
+  // Axios puts this in response.data
   return response.data?.users || [];
 }
 
