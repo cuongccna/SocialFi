@@ -72,7 +72,7 @@ async function getFeed(req, res, next) {
     // Results array and metadata
     let users = [];
     let resurrectedCount = 0;
-    const sources = { local: 0, global: 0, resurrected: 0 };
+    const sources = { local: 0, global: 0, resurrected: 0, random: 0 };
     
     // =========================================
     // STEP 1: LOCAL DISCOVERY
@@ -305,7 +305,67 @@ async function getFeed(req, res, next) {
     }
     
     // =========================================
-    // STEP 5: ENRICH with chart data
+    // STEP 5: EMERGENCY RANDOM FILL
+    // If ABSOLUTELY empty, just fetch RANDOM users and reset their swipes
+    // This ensures the feed is NEVER empty if users exist in DB
+    // =========================================
+    if (users.length < MIN_FEED_SIZE) {
+      console.log(`[Feed] Step 5: Emergency Random Fill (total=${users.length})`);
+      
+      const remaining = limit - users.length;
+      const excludeIds = users.map(u => u.id);
+      
+      // Fetch random users excluding current user and already fetched
+      const randomQuery = `
+        SELECT id 
+        FROM users 
+        WHERE id != $1 
+          AND is_active = TRUE
+          AND id != ALL($2::uuid[])
+        ORDER BY RANDOM()
+        LIMIT $3;
+      `;
+      
+      const randomResult = await query(randomQuery, [userId, excludeIds, remaining]);
+      const randomUserIds = randomResult.rows.map(r => r.id);
+      
+      if (randomUserIds.length > 0) {
+        console.log(`[Feed] Emergency filling with ${randomUserIds.length} random users...`);
+        
+        // DELETE ALL swipes for these users to ensure they show up fresh
+        await query(`
+          DELETE FROM swipes 
+          WHERE actor_id = $1 
+            AND target_id = ANY($2::uuid[])
+        `, [userId, randomUserIds]);
+        
+        resurrectedCount += randomUserIds.length;
+        
+        // Fetch the random users details
+        const randomUsersQuery = `
+          SELECT 
+            ${getUserSelectFields()},
+            CASE 
+              WHEN u.latitude IS NOT NULL AND u.longitude IS NOT NULL 
+              THEN ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2)
+              ELSE 999.0
+            END AS distance_km,
+            'random_fill' AS source
+          FROM users u
+          WHERE u.id = ANY($3::uuid[])
+          ORDER BY u.market_price DESC;
+        `;
+        
+        const randomUsersResult = await query(randomUsersQuery, [lat, lng, randomUserIds]);
+        users = [...users, ...randomUsersResult.rows];
+        sources.random = randomUsersResult.rows.length;
+        
+        console.log(`[Feed] Step 5 Result: ${randomUsersResult.rows.length} random users added, total=${users.length}`);
+      }
+    }
+
+    // =========================================
+    // STEP 6: ENRICH with chart data
     // =========================================
     if (users.length > 0) {
       const userIds = users.map(u => u.id);
@@ -338,7 +398,7 @@ async function getFeed(req, res, next) {
     // RESPONSE
     // =========================================
     const elapsed = Date.now() - startTime;
-    console.log(`[Feed] Complete: ${users.length} users in ${elapsed}ms (local=${sources.local}, global=${sources.global}, resurrected=${sources.resurrected})`);
+    console.log(`[Feed] Complete: ${users.length} users in ${elapsed}ms (local=${sources.local}, global=${sources.global}, resurrected=${sources.resurrected}, random=${sources.random})`);
     
     res.json({
       success: true,
