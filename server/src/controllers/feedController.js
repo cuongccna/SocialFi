@@ -24,6 +24,18 @@ const DEFAULT_RADIUS_KM = 10;     // Default search radius
 const MAX_RADIUS_KM = 500;        // Maximum search radius
 
 // ============================================
+// SEED DATA (For Genesis Protocol)
+// ============================================
+const SEED_FIRST_NAMES = ['Alex', 'Jordan', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Quinn', 'Avery', 'Parker', 'Skyler', 'Drew', 'Jamie', 'Reese', 'Finley', 'Sage', 'River', 'Phoenix', 'Rowan', 'Eden', 'Blake'];
+const SEED_LAST_NAMES = ['Nakamoto', 'Buterin', 'Wood', 'Sun', 'Zhao', 'Armstrong', 'Saylor', 'Hoskinson', 'Musk', 'Larsen', 'McCaleb', 'Lee', 'Ver', 'Novogratz', 'Silbert', 'Draper', 'Powell', 'Lubin', 'Bankman', 'Kwon'];
+const SEED_BIOS = [
+  '🚀 To the moon or bust! HODL gang', '💎 Diamond hands only.', '📈 DeFi degen | Yield farmer', '🐋 Whale watching enthusiast', '⚡ Lightning fast trades', '🌙 Night trader', '💰 Building generational wealth', '🔥 FOMO is my middle name', '🎯 Precision trading', '🌊 Riding the waves', '🦍 Ape together strong 🍌', '📊 Technical analysis nerd', '💸 Making money while you sleep', '🎰 High risk, high reward', '🔮 Crypto psychic'
+];
+const SEED_RANKS = ['SHRIMP', 'SHRIMP', 'SHRIMP', 'SHARK', 'SHARK', 'WHALE'];
+
+function randomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// ============================================
 // HELPER: Build SELECT fields for user query
 // ============================================
 const getUserSelectFields = (includeDistance = true) => `
@@ -72,7 +84,11 @@ async function getFeed(req, res, next) {
     // Results array and metadata
     let users = [];
     let resurrectedCount = 0;
-    const sources = { local: 0, global: 0, resurrected: 0, random: 0 };
+    const sources = { local: 0, global: 0, resurrected: 0, random: 0, genesis: 0 };
+    
+    // Check total users in DB for debugging
+    const countResult = await query('SELECT COUNT(*) as count FROM users WHERE is_active = TRUE AND id != $1', [userId]);
+    console.log(`[Feed] Total other active users in DB: ${countResult.rows[0].count}`);
     
     // =========================================
     // STEP 1: LOCAL DISCOVERY
@@ -365,7 +381,80 @@ async function getFeed(req, res, next) {
     }
 
     // =========================================
-    // STEP 6: ENRICH with chart data
+    // STEP 6: GENESIS PROTOCOL (Auto-Seed)
+    // If database is empty (or we've exhausted everyone), CREATE new users
+    // This ensures the feed is TRULY infinite
+    // =========================================
+    if (users.length < MIN_FEED_SIZE) {
+      console.log(`[Feed] Step 6: Genesis Protocol - Creating fake users (total=${users.length})`);
+      
+      const needed = TARGET_FEED_SIZE - users.length;
+      const newUsersIds = [];
+      
+      for (let i = 0; i < needed; i++) {
+        const firstName = randomElement(SEED_FIRST_NAMES);
+        const lastName = randomElement(SEED_LAST_NAMES);
+        const displayName = `${firstName} ${lastName}`;
+        const username = `${firstName.toLowerCase()}_${lastName.toLowerCase()}_${Date.now()}_${i}`;
+        // Generate a valid BigInt for telegram_id (avoid collision)
+        const telegramId = BigInt(Date.now()) + BigInt(Math.floor(Math.random() * 1000000)) + BigInt(i * 1000);
+        
+        // Random coords near user or default HCMC
+        const userLat = lat + (Math.random() * 0.1 - 0.05);
+        const userLng = lng + (Math.random() * 0.1 - 0.05);
+        
+        try {
+          const insertQuery = `
+            INSERT INTO users (
+              telegram_id, username, display_name, bio,
+              wallet_rank, market_price, price_change_24h, balance_love,
+              latitude, longitude, is_active, last_active_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, NOW())
+            RETURNING id;
+          `;
+          
+          const insertResult = await query(insertQuery, [
+            telegramId.toString(), // Pass as string for BigInt
+            username,
+            displayName,
+            randomElement(SEED_BIOS),
+            randomElement(SEED_RANKS),
+            (Math.random() * 4995 + 5).toFixed(2), // Price
+            (Math.random() * 80 - 30).toFixed(2),  // Change
+            Math.floor(Math.random() * 49900 + 100), // Balance
+            userLat,
+            userLng
+          ]);
+          
+          if (insertResult.rows[0]) {
+            newUsersIds.push(insertResult.rows[0].id);
+          }
+        } catch (err) {
+          console.error(`[Feed] Genesis creation failed for ${username}:`, err.message);
+        }
+      }
+      
+      if (newUsersIds.length > 0) {
+        console.log(`[Feed] Genesis created ${newUsersIds.length} new users`);
+        
+        const genesisQuery = `
+          SELECT 
+            ${getUserSelectFields()},
+            ROUND(calculate_distance_km($1, $2, u.latitude, u.longitude)::numeric, 2) AS distance_km,
+            'genesis' AS source
+          FROM users u
+          WHERE u.id = ANY($3::uuid[])
+          ORDER BY u.market_price DESC;
+        `;
+        
+        const genesisResult = await query(genesisQuery, [lat, lng, newUsersIds]);
+        users = [...users, ...genesisResult.rows];
+        sources.genesis = genesisResult.rows.length;
+      }
+    }
+
+    // =========================================
+    // STEP 7: ENRICH with chart data
     // =========================================
     if (users.length > 0) {
       const userIds = users.map(u => u.id);
@@ -398,7 +487,7 @@ async function getFeed(req, res, next) {
     // RESPONSE
     // =========================================
     const elapsed = Date.now() - startTime;
-    console.log(`[Feed] Complete: ${users.length} users in ${elapsed}ms (local=${sources.local}, global=${sources.global}, resurrected=${sources.resurrected}, random=${sources.random})`);
+    console.log(`[Feed] Complete: ${users.length} users in ${elapsed}ms (local=${sources.local}, global=${sources.global}, resurrected=${sources.resurrected}, random=${sources.random}, genesis=${sources.genesis})`);
     
     res.json({
       success: true,
