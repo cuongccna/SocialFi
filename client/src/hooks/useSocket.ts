@@ -22,31 +22,31 @@ const getSocketUrl = () => {
 const SOCKET_URL = getSocketUrl();
 
 interface Message {
-  id: number;
-  sender_id: number;
+  id: string;
+  sender_id: string;
   content: string;
   type: 'TEXT' | 'IMAGE' | 'STICKER' | 'SYSTEM';
   created_at: string;
   sender?: {
-    id: number;
+    id: string;
     first_name: string;
     avatar_url: string;
   };
 }
 
 interface UseSocketOptions {
-  conversationId?: number;
+  conversationId?: string;
   onMessage?: (message: Message) => void;
-  onTyping?: (data: { userId: number; isTyping: boolean }) => void;
+  onTyping?: (data: { userId: string; isTyping: boolean }) => void;
   onBalanceUpdate?: (data: { joint_balance: number }) => void;
-  onMessagesRead?: (data: { userId: number }) => void;
+  onMessagesRead?: (data: { userId: string }) => void;
 }
 
 export function useSocket(options: UseSocketOptions = {}) {
   const { user } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [typingUsers, setTypingUsers] = useState<number[]>([]);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
   // Store options in ref to avoid stale closures in event listeners
   const optionsRef = useRef(options);
@@ -107,14 +107,14 @@ export function useSocket(options: UseSocketOptions = {}) {
     };
 
     // Listen for typing indicators
-    const handleTypingStart = ({ userId }: { userId: number }) => {
+    const handleTypingStart = ({ userId }: { userId: string }) => {
       if (String(userId) !== String(user.id)) {
         setTypingUsers((prev) => [...new Set([...prev, userId])]);
         optionsRef.current.onTyping?.({ userId, isTyping: true });
       }
     };
 
-    const handleTypingStop = ({ userId }: { userId: number }) => {
+    const handleTypingStop = ({ userId }: { userId: string }) => {
       setTypingUsers((prev) => prev.filter((id) => id !== userId));
       optionsRef.current.onTyping?.({ userId, isTyping: false });
     };
@@ -125,7 +125,7 @@ export function useSocket(options: UseSocketOptions = {}) {
     };
 
     // Listen for read receipts
-    const handleMessagesRead = (data: { userId: number }) => {
+    const handleMessagesRead = (data: { userId: string }) => {
       optionsRef.current.onMessagesRead?.(data);
     };
 

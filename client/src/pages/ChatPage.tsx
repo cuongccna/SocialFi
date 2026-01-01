@@ -67,7 +67,7 @@ export default function ChatPage() {
     setTimeout(() => setShowBalanceBump(false), 500);
   }, []);
 
-  const handleTyping = useCallback((data: { userId: number; isTyping: boolean }) => {
+  const handleTyping = useCallback((data: { userId: string; isTyping: boolean }) => {
     if (String(data.userId) !== String(user?.id)) {
       setIsPartnerTyping(data.isTyping);
     }
@@ -79,7 +79,7 @@ export default function ChatPage() {
     stopTyping,
     markAsRead 
   } = useSocket({
-    conversationId: selectedConversation ? parseInt(selectedConversation.relationship_id) : undefined,
+    conversationId: selectedConversation ? selectedConversation.relationship_id : undefined,
     onMessage: (msg) => handleNewMessage(msg as unknown as Message),
     onBalanceUpdate: handleBalanceUpdate,
     onTyping: handleTyping,
