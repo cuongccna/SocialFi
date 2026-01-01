@@ -34,8 +34,8 @@ export async function getFeed(
   );
 
   // Backend returns { success: true, users: [...], meta: ... }
-  // Axios puts this in response.data
-  return response.data?.users || [];
+  // The 'api' wrapper already unwraps response.data, so 'response' IS the body
+  return response.users || [];
 }
 
 /**
