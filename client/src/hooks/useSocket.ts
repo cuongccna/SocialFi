@@ -16,7 +16,7 @@ const getSocketUrl = () => {
     return window.location.origin;
   }
   // Local development
-  return 'http://localhost:3005';
+  return 'http://localhost:3008';
 };
 
 const SOCKET_URL = getSocketUrl();

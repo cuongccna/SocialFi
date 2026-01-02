@@ -21,16 +21,16 @@ export default defineConfig({
       '.trycloudflare.com',
     ],
     // Proxy API requests to backend to avoid CORS issues during development
-    // For local dev: use http://localhost:3005
+    // For local dev: use http://localhost:3008
     // For testing with VPS: use https://magiamhot.io.vn
     proxy: {
       '/api': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:3005',
+        target: process.env.VITE_API_TARGET || 'http://localhost:3008',
         changeOrigin: true,
         secure: false,
       },
       '/public': {
-        target: process.env.VITE_API_TARGET || 'http://localhost:3005',
+        target: process.env.VITE_API_TARGET || 'http://localhost:3008',
         changeOrigin: true,
         secure: false,
       },
