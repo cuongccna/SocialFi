@@ -740,18 +740,9 @@ configure_pm2() {
     
     cd "$APP_DIR"
     
-    # Check if process is already running
-    if pm2 describe cryptocrush-api > /dev/null 2>&1; then
-        log_info "PM2 process exists, restarting..."
-        pm2 restart cryptocrush-api
-    else
-        log_info "Starting new PM2 process..."
-        pm2 start server/src/index.js --name cryptocrush-api \
-            --max-memory-restart 500M \
-            --log-date-format "YYYY-MM-DD HH:mm:ss" \
-            -o /var/log/cryptocrush/app.log \
-            -e /var/log/cryptocrush/error.log
-    fi
+    log_info "Starting/Reloading PM2 process from ecosystem.config.js..."
+    # Use startOrReload to ensure config changes (like PORT) are applied
+    pm2 startOrReload ecosystem.config.js --update-env
     
     # Save PM2 config
     pm2 save
@@ -813,8 +804,10 @@ quick_update() {
     # Ensure tonconnect manifest exists
     create_tonconnect_manifest
     
-    # Restart backend (preserves env)
-    pm2 restart cryptocrush-api
+    # Restart backend (reload config to apply port changes)
+    log_info "Reloading PM2 configuration..."
+    cd "$APP_DIR"
+    pm2 startOrReload ecosystem.config.js --update-env
     
     log_success "Quick update complete!"
 }
