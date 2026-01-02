@@ -13,6 +13,8 @@ import JuryPage from './pages/JuryPage';
 import TasksPage from './pages/TasksPage';
 import ReferralsPage from './pages/ReferralsPage';
 import WalletPage from './pages/WalletPage';
+import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 // Layout
 import BottomNav from './components/layout/BottomNav';
@@ -51,6 +53,8 @@ function App() {
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/referrals" element={<ReferralsPage />} />
           <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
         </Routes>
       </main>
 
