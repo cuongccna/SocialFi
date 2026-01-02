@@ -97,6 +97,30 @@ install_dependencies() {
 }
 
 # =====================================================
+# 1.1 Check Port Availability
+# =====================================================
+check_port_availability() {
+    local PORT=3008
+    log_info "Checking availability of port $PORT..."
+    
+    # Check if netstat is available
+    if ! command -v netstat &> /dev/null; then
+        log_warning "netstat not found, installing net-tools..."
+        apt-get update && apt-get install -y net-tools
+    fi
+    
+    if netstat -tuln | grep -q ":$PORT "; then
+        log_error "Port $PORT is already in use by another application!"
+        netstat -tulnp | grep ":$PORT "
+        log_error "Deployment aborted to prevent conflicts."
+        log_error "Please stop the conflicting process or change the port in ecosystem.config.js and nginx config."
+        exit 1
+    fi
+    
+    log_success "Port $PORT is free."
+}
+
+# =====================================================
 # 2. Setup PostgreSQL Database (create if not exists)
 # =====================================================
 setup_database() {
@@ -259,6 +283,14 @@ regenerate_certificates() {
 configure_env() {
     log_info "Configuring environment..."
     
+    # Load secrets from root .env if exists
+    if [ -f "$APP_DIR/.env" ]; then
+        log_info "Loading secrets from $APP_DIR/.env..."
+        set -a
+        source "$APP_DIR/.env"
+        set +a
+    fi
+    
     ENV_FILE="$APP_DIR/server/.env"
     
     # If .env exists, backup it
@@ -283,13 +315,13 @@ configure_env() {
     fi
     
     # Create production .env with all required variables
-    cat > "$ENV_FILE" << 'EOF'
+    cat > "$ENV_FILE" << EOF
 # ========================================
 # CryptoCrush Production Environment
 # ========================================
 
 # Server Configuration
-PORT=3005
+PORT=${PORT:-3008}
 NODE_ENV=production
 
 # Development Auth Bypass (MUST be false in production!)
@@ -298,32 +330,32 @@ DEV_BYPASS_AUTH=false
 # ========================================
 # PostgreSQL Database
 # ========================================
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=CryptoCrush_db
-DB_USER=CryptoCrush_user
-DB_PASSWORD=Cuongnv@123
+DB_HOST=${DB_HOST:-localhost}
+DB_PORT=${DB_PORT:-5432}
+DB_NAME=${DB_NAME:-CryptoCrush_db}
+DB_USER=${DB_USER:-CryptoCrush_user}
+DB_PASSWORD=${DB_PASSWORD}
 
 # Also keep PG vars for compatibility
-PGHOST=localhost
-PGPORT=5432
-PGDATABASE=CryptoCrush_db
-PGUSER=CryptoCrush_user
-PGPASSWORD=Cuongnv@123
+PGHOST=${DB_HOST:-localhost}
+PGPORT=${DB_PORT:-5432}
+PGDATABASE=${DB_NAME:-CryptoCrush_db}
+PGUSER=${DB_USER:-CryptoCrush_user}
+PGPASSWORD=${DB_PASSWORD}
 
 # ========================================
 # Telegram Bot
 # ========================================
-BOT_TOKEN=8450445506:AAHTteZ8NBswolK9N91y7d-cet9q5flIloE
-TELEGRAM_BOT_TOKEN=8450445506:AAHTteZ8NBswolK9N91y7d-cet9q5flIloE
+BOT_TOKEN=${BOT_TOKEN}
+TELEGRAM_BOT_TOKEN=${BOT_TOKEN}
 
 # ========================================
 # CORS & URLs
 # ========================================
-CORS_ORIGIN=https://magiamhot.io.vn
+CORS_ORIGIN=${CORS_ORIGIN:-https://magiamhot.io.vn}
 
 # TON Connect Manifest
-TONCONNECT_MANIFEST_URL=https://magiamhot.io.vn/tonconnect-manifest.json
+TONCONNECT_MANIFEST_URL=${TONCONNECT_MANIFEST_URL:-https://magiamhot.io.vn/tonconnect-manifest.json}
 EOF
 
     log_success "Environment configured with all required variables!"
@@ -945,6 +977,7 @@ show_menu() {
 full_deployment() {
     log_info "Starting full deployment..."
     
+    check_port_availability
     install_dependencies
     setup_database
     run_migrations

@@ -40,13 +40,13 @@ module.exports = {
       // Environment variables
       env: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 3008
       },
       
       // Development environment (use with --env development)
       env_development: {
         NODE_ENV: 'development',
-        PORT: 3000
+        PORT: 3008
       },
       
       // Log files
