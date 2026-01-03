@@ -91,6 +91,46 @@ async function getNotifications(req, res, next) {
       });
     }
 
+    // Get pending game invites (sessions where user is partner and game not started)
+    const gameInvitesResult = await pool.query(`
+      SELECT 
+        gs.id,
+        gs.game_type,
+        gs.created_at,
+        gs.user_id as inviter_id,
+        u.display_name as inviter_name,
+        u.avatar_url as inviter_avatar
+      FROM game_sessions gs
+      JOIN users u ON u.id = gs.user_id
+      WHERE gs.partner_id = $1
+        AND gs.completed = FALSE
+        AND gs.created_at > NOW() - INTERVAL '1 hour'
+      ORDER BY gs.created_at DESC
+      LIMIT 5
+    `, [userId]);
+
+    for (const invite of gameInvitesResult.rows) {
+      const gameTypeDisplay = invite.game_type === 'KYP' ? 'Know Your Partner' 
+        : invite.game_type === 'CANDLE_KISS' ? 'Candle Kiss'
+        : invite.game_type;
+      
+      notifications.push({
+        id: `game_${invite.id}`,
+        type: 'GAME_INVITE',
+        title: 'Game Invite 🎮',
+        body: `${invite.inviter_name} invited you to play ${gameTypeDisplay}`,
+        data: {
+          user_id: invite.inviter_id,
+          user_name: invite.inviter_name,
+          user_avatar: invite.inviter_avatar,
+          game_type: invite.game_type,
+          session_id: invite.id,
+        },
+        is_read: false,
+        created_at: invite.created_at,
+      });
+    }
+
     // Get unclaimed task rewards
     const tasksResult = await pool.query(`
       SELECT 

@@ -33,6 +33,13 @@ function initChatSocket(io) {
       if (user_id) {
         socketUserId = user_id;
         registerConnectedUser(user_id, socket.id);
+        
+        // Join user's personal room for direct notifications
+        const userRoom = `user:${user_id}`;
+        socket.join(userRoom);
+        joinedRooms.add(userRoom);
+        console.log(`👤 User ${user_id} joined personal room: ${userRoom}`);
+        
         socket.emit('registered', { success: true });
       }
     });
@@ -53,6 +60,12 @@ function initChatSocket(io) {
         if (!socketUserId && user_id) {
           socketUserId = user_id;
           registerConnectedUser(user_id, socket.id);
+          
+          // Join user's personal room for direct notifications
+          const userRoom = `user:${user_id}`;
+          socket.join(userRoom);
+          joinedRooms.add(userRoom);
+          console.log(`👤 User ${user_id} joined personal room via join_room: ${userRoom}`);
         }
 
         // Verify user is part of this relationship

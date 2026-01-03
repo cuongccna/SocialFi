@@ -5,6 +5,7 @@
 
 const { query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
+const { sendGameInvite } = require('../services/telegramBot');
 
 // ============================================
 // KYP Questions (Server-side copy)
@@ -230,11 +231,61 @@ async function startGame(req, res, next) {
 
     await client.query('COMMIT');
 
-    // Get partner info
+    // Get partner info (for response + notification)
     const partnerResult = await query(
-      `SELECT display_name, avatar_url FROM users WHERE id = $1`,
+      `SELECT display_name, avatar_url, telegram_id FROM users WHERE id = $1`,
       [partnerId]
     );
+
+    // Get inviter info (for notification)
+    const inviterResult = await query(
+      `SELECT display_name FROM users WHERE id = $1`,
+      [userId]
+    );
+    const inviterName = inviterResult.rows[0]?.display_name || 'Your match';
+    const partner = partnerResult.rows[0];
+
+    // ============================================
+    // Send notification to partner
+    // ============================================
+    const io = req.app.get('io');
+    let inviteSent = false;
+
+    // First try Socket.io (if partner is online in the app)
+    if (io) {
+      // Broadcast to partner's room
+      const partnerRoom = `user:${partnerId}`;
+      io.to(partnerRoom).emit('game_invite', {
+        gameId: sessionId,
+        inviterName: inviterName,
+        inviterId: userId,
+        gameType: 'KYP',
+        relationshipId: relationship_id,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[KYP] 🎮 Socket invite sent to partner room: ${partnerRoom}`);
+      inviteSent = true;
+    }
+
+    // Also send via Telegram bot (for offline notifications)
+    if (partner?.telegram_id) {
+      try {
+        const telegramResult = await sendGameInvite(
+          partner.telegram_id,
+          inviterName,
+          'KYP',
+          sessionId
+        );
+        if (telegramResult?.success) {
+          console.log(`[KYP] 📱 Telegram invite sent to ${partner.display_name}`);
+          inviteSent = true;
+        }
+      } catch (err) {
+        console.warn('[KYP] Failed to send Telegram invite:', err.message);
+      }
+    }
+
+    console.log(`[KYP START] Notification sent: ${inviteSent ? 'YES' : 'NO'}`);
 
     res.json({
       success: true,
@@ -252,7 +303,8 @@ async function startGame(req, res, next) {
         matches: 0,
         created_at: sessionResult.rows[0].created_at,
       },
-      partner: partnerResult.rows[0] || null,
+      partner: partner ? { display_name: partner.display_name, avatar_url: partner.avatar_url } : null,
+      invite_sent: inviteSent,
     });
   } catch (error) {
     await client.query('ROLLBACK');
