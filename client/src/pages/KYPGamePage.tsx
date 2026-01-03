@@ -931,8 +931,8 @@ export default function KYPGamePage() {
 
       {/* Game Content */}
       <div className="flex-1 overflow-y-auto">
-        {/* Waiting for partner */}
-        {round?.phase === 'WAITING' && (
+        {/* Waiting for partner - show when session exists but round is null or phase is WAITING */}
+        {session && (!round || round?.phase === 'WAITING' || session?.phase === 'WAITING') && (
           <div className="h-full flex items-center justify-center">
             <PulsingHeart text="Waiting for partner to join..." />
           </div>

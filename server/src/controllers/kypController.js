@@ -140,6 +140,10 @@ async function startGame(req, res, next) {
 
     const sessionId = sessionResult.rows[0].id;
 
+    console.log('[KYP START] Creating game session:', sessionId);
+    console.log('[KYP START] Players:', { player_a: userId, player_b: partnerId });
+    console.log('[KYP START] Relationship ID:', relationship_id);
+
     // Store game state in memory
     activeGames.set(sessionId, {
       id: sessionId,
@@ -160,6 +164,8 @@ async function startGame(req, res, next) {
       player_b_answer: null,
       created_at: new Date().toISOString(),
     });
+
+    console.log('[KYP START] Game stored in activeGames. Total games:', activeGames.size);
 
     await client.query('COMMIT');
 
@@ -203,15 +209,23 @@ async function joinGame(req, res, next) {
     const userId = req.user.id;
     const { session_id } = req.body;
 
+    console.log('[KYP JOIN] Request:', { userId, session_id });
+    console.log('[KYP JOIN] Active games count:', activeGames.size);
+    console.log('[KYP JOIN] Active game IDs:', Array.from(activeGames.keys()));
+
     if (!session_id) {
+      console.log('[KYP JOIN] Error: No session_id provided');
       throw new ApiError(400, 'Session ID required');
     }
 
     const game = activeGames.get(session_id);
 
     if (!game) {
+      console.log('[KYP JOIN] Error: Game not found in activeGames map for session_id:', session_id);
       throw new ApiError(404, 'Game not found or expired');
     }
+    
+    console.log('[KYP JOIN] Found game:', { id: game.id, player_a: game.player_a_id, player_b: game.player_b_id, phase: game.phase });
 
     if (game.player_a_id !== userId && game.player_b_id !== userId) {
       throw new ApiError(403, 'You are not part of this game');
@@ -261,13 +275,21 @@ async function getGameState(req, res, next) {
     const userId = req.user.id;
     const { sessionId } = req.params;
 
+    console.log('[KYP STATE] Request:', { userId, sessionId });
+    console.log('[KYP STATE] Active games count:', activeGames.size);
+    console.log('[KYP STATE] Active game IDs:', Array.from(activeGames.keys()));
+
     const game = activeGames.get(sessionId);
 
     if (!game) {
+      console.log('[KYP STATE] Error: Game not found for sessionId:', sessionId);
       throw new ApiError(404, 'Game not found or expired');
     }
 
+    console.log('[KYP STATE] Found game:', { id: game.id, phase: game.phase, players: [game.player_a_id, game.player_b_id] });
+
     if (game.player_a_id !== userId && game.player_b_id !== userId) {
+      console.log('[KYP STATE] Error: User not part of game');
       throw new ApiError(403, 'You are not part of this game');
     }
 
