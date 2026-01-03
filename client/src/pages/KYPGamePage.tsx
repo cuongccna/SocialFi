@@ -656,6 +656,8 @@ export default function KYPGamePage() {
         const phaseData = data as { phase: KYPGamePhase; round: KYPRoundState | null };
         setRound(phaseData.round);
         setTimeRemaining(phaseData.round?.time_remaining || 0);
+        // Also update session phase so UI reflects the change
+        setSession(prev => prev ? { ...prev, phase: phaseData.phase, current_round: phaseData.round?.round_number || prev.current_round } : null);
         // Reset local state on phase change
         if (phaseData.phase === 'BETTING') {
           setMyBet(null);
