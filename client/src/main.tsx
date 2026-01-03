@@ -8,8 +8,13 @@ import { initTelegramWebApp } from './utils/telegram'
 import { AuthProvider } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 
-// Initialize Telegram WebApp SDK
-initTelegramWebApp();
+// Initialize Telegram WebApp SDK safely (prevent double init in StrictMode)
+let telegramInitialized = false;
+if (!telegramInitialized) {
+  telegramInitialized = true;
+  // Delay init to ensure DOM is ready
+  setTimeout(() => initTelegramWebApp(), 0);
+}
 
 // TonConnect manifest URL - use relative path for development
 const manifestUrl = import.meta.env.PROD 

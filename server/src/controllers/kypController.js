@@ -542,7 +542,27 @@ async function getResults(req, res, next) {
       `UPDATE game_sessions 
        SET score = $1, completed = TRUE, duration_seconds = $2, love_earned = $3
        WHERE id = $4`,
-      [game.matches, 0, loveEarned, sessionId]
+      [matchPercentage, 0, loveEarned, sessionId]
+    );
+
+    // Update user_game_stats for both players (for leaderboard)
+    await client.query(
+      `INSERT INTO user_game_stats (user_id, kyp_high_score, total_score)
+       VALUES ($1, $2, $2)
+       ON CONFLICT (user_id) DO UPDATE SET
+         kyp_high_score = GREATEST(user_game_stats.kyp_high_score, $2),
+         total_score = user_game_stats.total_score + $2,
+         updated_at = NOW()`,
+      [game.player_a_id, matchPercentage]
+    );
+    await client.query(
+      `INSERT INTO user_game_stats (user_id, kyp_high_score, total_score)
+       VALUES ($1, $2, $2)
+       ON CONFLICT (user_id) DO UPDATE SET
+         kyp_high_score = GREATEST(user_game_stats.kyp_high_score, $2),
+         total_score = user_game_stats.total_score + $2,
+         updated_at = NOW()`,
+      [game.player_b_id, matchPercentage]
     );
 
     // Add $LOVE rewards to both players
@@ -787,16 +807,48 @@ function setupKYPSocketHandlers(io) {
               
               // Mark game as completed in database
               await query(
-                `UPDATE game_sessions SET completed = TRUE, score = $2 WHERE id = $1`,
-                [session_id, loveEarned]
+                `UPDATE game_sessions SET completed = TRUE, score = $2, love_earned = $3 WHERE id = $1`,
+                [session_id, matchPercentage, loveEarned]
               );
+
+              // Update user_game_stats for both players (for leaderboard)
+              // Use matchPercentage as the score (0-100)
+              await query(
+                `INSERT INTO user_game_stats (user_id, kyp_high_score, total_score)
+                 VALUES ($1, $2, $2)
+                 ON CONFLICT (user_id) DO UPDATE SET
+                   kyp_high_score = GREATEST(user_game_stats.kyp_high_score, $2),
+                   total_score = user_game_stats.total_score + $2,
+                   updated_at = NOW()`,
+                [game.player_a_id, matchPercentage]
+              );
+              await query(
+                `INSERT INTO user_game_stats (user_id, kyp_high_score, total_score)
+                 VALUES ($1, $2, $2)
+                 ON CONFLICT (user_id) DO UPDATE SET
+                   kyp_high_score = GREATEST(user_game_stats.kyp_high_score, $2),
+                   total_score = user_game_stats.total_score + $2,
+                   updated_at = NOW()`,
+                [game.player_b_id, matchPercentage]
+              );
+
+              // Add $LOVE rewards to both players
+              if (loveEarned > 0) {
+                await query(
+                  `UPDATE users SET balance_love = balance_love + $1 WHERE id = ANY($2::uuid[])`,
+                  [loveEarned, [game.player_a_id, game.player_b_id]]
+                );
+              }
               
               // Clean up from active games
               activeGames.delete(session_id);
-              console.log(`[KYP] Game ${session_id} completed. Match: ${matchPercentage}%`);
+              console.log(`[KYP] Game ${session_id} completed. Match: ${matchPercentage}%. Stats updated.`);
               
             } catch (dbError) {
               console.error('[KYP] Error fetching player info for game end:', dbError);
+              const fallbackMatchPercentage = Math.round((game.matches / game.total_rounds) * 100);
+              const fallbackLoveEarned = game.player_a_score + game.player_b_score;
+              
               // Fallback emit with minimal data
               io.to(`kyp:${session_id}`).emit('kyp:game_end', {
                 session_id,
@@ -804,10 +856,35 @@ function setupKYPSocketHandlers(io) {
                 player_b: { id: game.player_b_id, name: 'Player B', avatar_url: null, score: game.player_b_score },
                 total_matches: game.matches,
                 total_rounds: game.total_rounds,
-                match_percentage: Math.round((game.matches / game.total_rounds) * 100),
-                love_earned: game.player_a_score + game.player_b_score,
+                match_percentage: fallbackMatchPercentage,
+                love_earned: fallbackLoveEarned,
                 compatibility_rating: 'Good Match 💫',
               });
+
+              // Still try to update stats even on error
+              try {
+                await query(
+                  `INSERT INTO user_game_stats (user_id, kyp_high_score, total_score)
+                   VALUES ($1, $2, $2)
+                   ON CONFLICT (user_id) DO UPDATE SET
+                     kyp_high_score = GREATEST(user_game_stats.kyp_high_score, $2),
+                     total_score = user_game_stats.total_score + $2,
+                     updated_at = NOW()`,
+                  [game.player_a_id, fallbackMatchPercentage]
+                );
+                await query(
+                  `INSERT INTO user_game_stats (user_id, kyp_high_score, total_score)
+                   VALUES ($1, $2, $2)
+                   ON CONFLICT (user_id) DO UPDATE SET
+                     kyp_high_score = GREATEST(user_game_stats.kyp_high_score, $2),
+                     total_score = user_game_stats.total_score + $2,
+                     updated_at = NOW()`,
+                  [game.player_b_id, fallbackMatchPercentage]
+                );
+                activeGames.delete(session_id);
+              } catch (statsError) {
+                console.error('[KYP] Error updating stats:', statsError);
+              }
             }
           } else {
             // Reset for next round

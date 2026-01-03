@@ -5,11 +5,21 @@
 
 import WebApp from '@twa-dev/sdk';
 
+// Track initialization to prevent double-init
+let initialized = false;
+
 /**
  * Initialize Telegram WebApp
  * Call this once when the app mounts
  */
 export function initTelegramWebApp(): void {
+  // Prevent double initialization (React StrictMode calls twice)
+  if (initialized) {
+    console.log('⏭️ Telegram WebApp already initialized, skipping');
+    return;
+  }
+  initialized = true;
+
   try {
     // Expand the Mini App to full height FIRST
     WebApp.expand();
