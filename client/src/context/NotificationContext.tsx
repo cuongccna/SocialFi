@@ -180,9 +180,17 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     });
 
     socketInstance.on('connect', () => {
-      console.log('🔔 NotificationContext socket connected');
+      console.log('🔔 NotificationContext socket connected, user:', user.id);
       // Register user for notifications
       socketInstance.emit('register_user', { user_id: user.id });
+    });
+
+    socketInstance.on('registered', (data: { success: boolean }) => {
+      console.log('🔔 NotificationContext registered:', data);
+    });
+
+    socketInstance.on('new_message_notification', (data: unknown) => {
+      console.log('🔔 [DIRECT] new_message_notification received:', data);
     });
 
     setSocket(socketInstance);
@@ -199,9 +207,13 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
     // Handle new messages - increment if not in that chat room
     const handleReceiveMessage = (data: { relationship_id: string; sender_id: string }) => {
+      console.log('📩 Received message notification:', data, 'activeChat:', activeChat, 'userId:', user?.id);
       // Don't increment if user is currently viewing that chat
       if (activeChat !== data.relationship_id && data.sender_id !== user?.id) {
+        console.log('📩 Incrementing unread messages count');
         incrementUnreadMessages();
+      } else {
+        console.log('📩 Skipping increment - user in chat or is sender');
       }
     };
 

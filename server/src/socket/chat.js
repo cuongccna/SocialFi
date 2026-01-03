@@ -200,7 +200,7 @@ function initChatSocket(io) {
         // (for badge updates when not in chat)
         // ==========================================
         const partnerRoom = `user:${partnerId}`;
-        io.to(partnerRoom).emit('new_message_notification', {
+        const notificationPayload = {
           relationship_id,
           sender_id,
           sender_name: message.sender_name,
@@ -208,9 +208,15 @@ function initChatSocket(io) {
           content: content.substring(0, 50),
           type,
           timestamp: new Date().toISOString(),
-        });
+        };
+        
+        // Check how many sockets are in the partner's room
+        const partnerRoomSockets = io.sockets.adapter.rooms.get(partnerRoom);
+        console.log(`📬 Sending new_message_notification to ${partnerRoom}, sockets in room: ${partnerRoomSockets?.size || 0}`);
+        
+        io.to(partnerRoom).emit('new_message_notification', notificationPayload);
 
-        console.log(`💬 Message sent in ${roomName}: ${content.substring(0, 30)}... (notified ${partnerRoom})`);
+        console.log(`💬 Message sent in ${roomName}: ${content.substring(0, 30)}...`);
 
       } catch (err) {
         console.error('Error sending message:', err);
