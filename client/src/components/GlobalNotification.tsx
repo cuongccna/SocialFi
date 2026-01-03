@@ -112,15 +112,21 @@ export default function GlobalNotification() {
     
     if (notification.type === 'game_invite') {
       const gameRoute = getGameRoutePath(notification.data.gameType);
-      // Navigate to game with optional room ID
+      // Navigate to game with session ID
       const params = new URLSearchParams();
+      
+      // For KYP game, use 'session' parameter (the gameId is actually the session_id)
       if (notification.data.gameId && !notification.data.gameId.startsWith('pending_')) {
-        params.set('room', notification.data.gameId);
+        params.set('session', notification.data.gameId);
       }
-      if (notification.data.inviterId) {
-        params.set('partner', notification.data.inviterId);
+      
+      // Also include relationship ID if available
+      if (notification.data.relationshipId) {
+        params.set('relationship', notification.data.relationshipId);
       }
+      
       const queryString = params.toString();
+      console.log('🎮 Navigating to game:', gameRoute, 'params:', queryString);
       navigate(`${gameRoute}${queryString ? `?${queryString}` : ''}`);
     }
     

@@ -23,6 +23,7 @@ export interface GameInviteEvent {
   inviterName: string;
   inviterId: string;
   gameType: 'KYP' | 'MINING' | 'CANDLE_KISS';
+  relationshipId?: string;
   timestamp: string;
 }
 
