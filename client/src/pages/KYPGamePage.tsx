@@ -646,16 +646,16 @@ export default function KYPGamePage() {
     
     switch (event) {
       case KYP_SOCKET_EVENTS.GAME_STATE:
-        const state = data as { session: KYPGameSession; round: KYPRoundState };
+        const state = data as { session: KYPGameSession; round: KYPRoundState | null };
         setSession(state.session);
         setRound(state.round);
         setTimeRemaining(state.round?.time_remaining || 0);
         break;
         
       case KYP_SOCKET_EVENTS.PHASE_CHANGE:
-        const phaseData = data as { phase: KYPGamePhase; round: KYPRoundState };
+        const phaseData = data as { phase: KYPGamePhase; round: KYPRoundState | null };
         setRound(phaseData.round);
-        setTimeRemaining(phaseData.round.time_remaining);
+        setTimeRemaining(phaseData.round?.time_remaining || 0);
         // Reset local state on phase change
         if (phaseData.phase === 'BETTING') {
           setMyBet(null);
