@@ -742,14 +742,73 @@ function setupKYPSocketHandlers(io) {
         });
 
         // After reveal, advance to next round or end game
-        setTimeout(() => {
+        setTimeout(async () => {
           if (game.current_round >= game.total_rounds) {
-            io.to(`kyp:${session_id}`).emit('kyp:game_end', {
-              session_id,
-              matches: game.matches,
-              total_rounds: game.total_rounds,
-              match_percentage: Math.round((game.matches / game.total_rounds) * 100),
-            });
+            // Game finished - fetch player info from database
+            try {
+              const playersResult = await query(`
+                SELECT id, display_name, avatar_url FROM users 
+                WHERE id IN ($1, $2)
+              `, [game.player_a_id, game.player_b_id]);
+              
+              const playerA = playersResult.rows.find(p => p.id === game.player_a_id) || {};
+              const playerB = playersResult.rows.find(p => p.id === game.player_b_id) || {};
+              
+              const matchPercentage = Math.round((game.matches / game.total_rounds) * 100);
+              const loveEarned = game.player_a_score + game.player_b_score;
+              
+              // Calculate compatibility rating
+              let compatibilityRating = 'Strangers 👋';
+              if (matchPercentage >= 90) compatibilityRating = 'Soulmates 💕';
+              else if (matchPercentage >= 70) compatibilityRating = 'Perfect Match 💘';
+              else if (matchPercentage >= 50) compatibilityRating = 'Getting There 💫';
+              else if (matchPercentage >= 30) compatibilityRating = 'Room to Grow 🌱';
+              
+              io.to(`kyp:${session_id}`).emit('kyp:game_end', {
+                session_id,
+                player_a: {
+                  id: game.player_a_id,
+                  name: playerA.display_name || 'Player A',
+                  avatar_url: playerA.avatar_url || null,
+                  score: game.player_a_score,
+                },
+                player_b: {
+                  id: game.player_b_id,
+                  name: playerB.display_name || 'Player B',
+                  avatar_url: playerB.avatar_url || null,
+                  score: game.player_b_score,
+                },
+                total_matches: game.matches,
+                total_rounds: game.total_rounds,
+                match_percentage: matchPercentage,
+                love_earned: loveEarned,
+                compatibility_rating: compatibilityRating,
+              });
+              
+              // Mark game as completed in database
+              await query(
+                `UPDATE game_sessions SET completed = TRUE, score = $2 WHERE id = $1`,
+                [session_id, loveEarned]
+              );
+              
+              // Clean up from active games
+              activeGames.delete(session_id);
+              console.log(`[KYP] Game ${session_id} completed. Match: ${matchPercentage}%`);
+              
+            } catch (dbError) {
+              console.error('[KYP] Error fetching player info for game end:', dbError);
+              // Fallback emit with minimal data
+              io.to(`kyp:${session_id}`).emit('kyp:game_end', {
+                session_id,
+                player_a: { id: game.player_a_id, name: 'Player A', avatar_url: null, score: game.player_a_score },
+                player_b: { id: game.player_b_id, name: 'Player B', avatar_url: null, score: game.player_b_score },
+                total_matches: game.matches,
+                total_rounds: game.total_rounds,
+                match_percentage: Math.round((game.matches / game.total_rounds) * 100),
+                love_earned: game.player_a_score + game.player_b_score,
+                compatibility_rating: 'Good Match 💫',
+              });
+            }
           } else {
             // Reset for next round
             game.current_round++;

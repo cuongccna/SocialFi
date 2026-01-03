@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users, Camera, BadgeCheck, Sparkles, Rocket, Zap, X, Upload } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { TrendingUp, TrendingDown, Coins, Settings, Wallet, RefreshCw, Loader2, ChevronRight, Award, Heart, Users, Camera, BadgeCheck, Sparkles, Rocket, Zap, X, Upload, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { getUserStats, formatNumber, boostProfile, uploadAvatar, type UserStats } from '../services/profile.service';
 import { getMatches } from '../services/matches.service';
 import { haptic } from '../utils/telegram';
 import { getAvatarUrl, isDefaultAvatar, avatarRingClass } from '../utils/helpers';
+import { useNotifications } from '../context/NotificationContext';
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const { user, isLoading: authLoading, refreshUser } = useAuth();
+  const { unreadMessagesCount, pendingGameInvites, unclaimedRewardsCount } = useNotifications();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [matchCount, setMatchCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -231,6 +234,18 @@ export default function ProfilePage() {
               title="Refresh stats"
             >
               <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+            <button 
+              onClick={() => { haptic.impact('light'); navigate('/notifications'); }}
+              className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors relative"
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              {(unreadMessagesCount + pendingGameInvites + unclaimedRewardsCount) > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-dark text-xs font-bold rounded-full flex items-center justify-center">
+                  {unreadMessagesCount + pendingGameInvites + unclaimedRewardsCount}
+                </span>
+              )}
             </button>
             <button 
               onClick={() => { haptic.impact('light'); setShowSettings(true); }}

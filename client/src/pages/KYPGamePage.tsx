@@ -654,10 +654,12 @@ export default function KYPGamePage() {
         
       case KYP_SOCKET_EVENTS.PHASE_CHANGE:
         const phaseData = data as { phase: KYPGamePhase; round: KYPRoundState | null };
+        console.log('📍 Phase change:', phaseData.phase);
         setRound(phaseData.round);
         setTimeRemaining(phaseData.round?.time_remaining || 0);
         // Also update session phase so UI reflects the change
         setSession(prev => prev ? { ...prev, phase: phaseData.phase, current_round: phaseData.round?.round_number || prev.current_round } : null);
+        // If phase is RESULTS and we don't have a result yet, the GAME_END event should come
         // Reset local state on phase change
         if (phaseData.phase === 'BETTING') {
           setMyBet(null);
@@ -693,7 +695,10 @@ export default function KYPGamePage() {
         break;
         
       case KYP_SOCKET_EVENTS.GAME_END:
+        console.log('🎮 Game ended, setting result:', data);
         setResult(data as KYPGameResult);
+        playSound('gameEnd');
+        haptic.notification('success');
         break;
     }
   }, [user?.id]);
@@ -987,6 +992,24 @@ export default function KYPGamePage() {
               avatar: partnerInfo?.avatar || null,
             }}
           />
+        )}
+
+        {/* Results Phase - waiting for final result */}
+        {(session?.phase === 'RESULTS' || round?.phase === 'RESULTS') && !result && (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+              <motion.div
+                animate={{ scale: [1, 1.2, 1], rotate: [0, 10, -10, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className="text-6xl mb-4"
+              >
+                🎉
+              </motion.div>
+              <h2 className="text-2xl font-bold text-white mb-2">Game Complete!</h2>
+              <p className="text-white/60 mb-4">Calculating your compatibility...</p>
+              <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
+            </div>
+          </div>
         )}
       </div>
     </div>

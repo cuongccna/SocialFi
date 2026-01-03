@@ -20,6 +20,7 @@ import KYPGamePage from './pages/KYPGamePage';
 import MiningGamePage from './pages/MiningGamePage';
 import CandleKissPage from './pages/CandleKissPage';
 import EarnHub from './pages/EarnHub';
+import NotificationsPage from './pages/NotificationsPage';
 
 // Layout
 import BottomNav from './components/layout/BottomNav';
@@ -71,6 +72,7 @@ function App() {
           <Route path="/games/mining" element={<MiningGamePage />} />
           <Route path="/games/candle" element={<CandleKissPage />} />
           <Route path="/earn" element={<EarnHub />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Routes>
