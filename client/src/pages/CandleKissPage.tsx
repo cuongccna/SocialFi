@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, TrendingUp, TrendingDown, Lock, 
@@ -293,10 +293,12 @@ function BettingButtons({
 
 function PartnerProposal({
   proposal,
+  partnerName,
   onAccept,
   onReject,
 }: {
   proposal: BetProposal;
+  partnerName: string;
   onAccept: () => void;
   onReject: () => void;
 }) {
@@ -309,7 +311,7 @@ function PartnerProposal({
       animate={{ opacity: 1, y: 0 }}
     >
       <div className="text-center mb-4">
-        <div className="text-white/60 mb-2">Partner wants to go</div>
+        <div className="text-white/60 mb-2">{partnerName} wants to go</div>
         <div className={`text-3xl font-bold ${isBull ? 'text-green-400' : 'text-red-400'}`}>
           {isBull ? '🟢 LONG (BULL)' : '🔴 SHORT (BEAR)'}
         </div>
@@ -580,11 +582,28 @@ function SettlementResult({
 
 export default function CandleKissPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
-  const relationshipId = searchParams.get('relationship_id');
-  const sessionIdParam = searchParams.get('session_id');
+  // Get partner info from location state (from GameHubPage)
+  const locationState = location.state as { 
+    sessionId?: string;
+    partner?: { 
+      id: string; 
+      displayName: string; 
+      avatarUrl: string | null;
+      relationshipId: string;
+    };
+  } | null;
+
+  const relationshipId = locationState?.partner?.relationshipId || searchParams.get('relationship_id');
+  const sessionIdParam = locationState?.sessionId || searchParams.get('session_id');
+  const partnerFromState = locationState?.partner;
+
+  // Partner display info
+  const partnerDisplayName = partnerFromState?.displayName || 'Partner';
+  const partnerAvatarUrl = partnerFromState?.avatarUrl;
 
   // Game state
   const [session, setSession] = useState<CandleKissSession | null>(null);
@@ -919,11 +938,15 @@ export default function CandleKissPage() {
         
         <div className="text-center">
           <h1 className="text-lg font-bold text-white">🕯️ Candle Kiss</h1>
-          <p className="text-xs text-white/50">High Risk Co-op Betting</p>
+          <p className="text-xs text-white/50">with {partnerDisplayName}</p>
         </div>
 
         <div className="flex items-center gap-1 px-3 py-1 bg-pink-600/30 rounded-full">
-          <Users className="w-4 h-4 text-pink-400" />
+          {partnerAvatarUrl ? (
+            <img src={partnerAvatarUrl} className="w-5 h-5 rounded-full" alt="" />
+          ) : (
+            <Users className="w-4 h-4 text-pink-400" />
+          )}
           <span className="text-sm text-white font-medium">x2</span>
         </div>
       </div>
@@ -995,6 +1018,7 @@ export default function CandleKissPage() {
         {phase === 'PROPOSING' && partnerProposal && (
           <PartnerProposal
             proposal={partnerProposal}
+            partnerName={partnerDisplayName}
             onAccept={handleAcceptBet}
             onReject={handleRejectBet}
           />

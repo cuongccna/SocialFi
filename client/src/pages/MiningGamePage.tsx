@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion, useAnimation } from 'framer-motion';
 import { 
   ArrowLeft, Zap, Battery, MessageCircle, 
@@ -279,11 +279,28 @@ function TapParticle({ x, y, value }: { x: number; y: number; value: number }) {
 
 export default function MiningGamePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
-  const relationshipId = searchParams.get('relationship_id');
-  const sessionId = searchParams.get('session_id');
+  // Get partner info from location state (from GameHubPage)
+  const locationState = location.state as { 
+    sessionId?: string;
+    partner?: { 
+      id: string; 
+      displayName: string; 
+      avatarUrl: string | null;
+      relationshipId: string;
+    };
+  } | null;
+
+  const relationshipId = locationState?.partner?.relationshipId || searchParams.get('relationship_id');
+  const sessionId = locationState?.sessionId || searchParams.get('session_id');
+  const partnerFromState = locationState?.partner;
+
+  // Partner display info
+  const partnerDisplayName = partnerFromState?.displayName || 'Partner';
+  const partnerAvatarUrl = partnerFromState?.avatarUrl;
 
   // Game state
   const [session, setSession] = useState<MiningSession | null>(null);
@@ -560,11 +577,15 @@ export default function MiningGamePage() {
         
         <div className="text-center">
           <h1 className="text-lg font-bold text-white">Love Mining Rig</h1>
-          <p className="text-xs text-white/50">⛏️ Co-op Tapper</p>
+          <p className="text-xs text-white/50">⛏️ with {partnerDisplayName}</p>
         </div>
 
         <div className="flex items-center gap-1 px-3 py-1 bg-purple-600/30 rounded-full">
-          <Users className="w-4 h-4 text-purple-400" />
+          {partnerAvatarUrl ? (
+            <img src={partnerAvatarUrl} className="w-5 h-5 rounded-full" alt="" />
+          ) : (
+            <Users className="w-4 h-4 text-purple-400" />
+          )}
           <span className="text-sm text-white font-medium">x2</span>
         </div>
       </div>
@@ -592,7 +613,7 @@ export default function MiningGamePage() {
           {/* Tap Counts */}
           <div className="flex justify-between text-xs text-white/50">
             <span>You: {myTaps} taps</span>
-            <span>Partner: {partnerTaps} taps</span>
+            <span>{partnerDisplayName}: {partnerTaps} taps</span>
           </div>
 
           {/* Stamina Bar */}

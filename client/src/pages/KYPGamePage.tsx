@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   ArrowLeft, Heart, Clock, Check, X,
@@ -598,11 +598,24 @@ function ResultsScreen({ result, onShare, onPlayAgain, onExit, isSharing }: Resu
 
 export default function KYPGamePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   
-  const relationshipId = searchParams.get('relationship');
-  const sessionId = searchParams.get('session');
+  // Get partner info from location state (from GameHubPage)
+  const locationState = location.state as { 
+    sessionId?: string;
+    partner?: { 
+      id: string; 
+      displayName: string; 
+      avatarUrl: string | null;
+      relationshipId: string;
+    };
+  } | null;
+
+  const relationshipId = locationState?.partner?.relationshipId || searchParams.get('relationship');
+  const sessionId = locationState?.sessionId || searchParams.get('session');
+  const partnerFromState = locationState?.partner;
 
   // Game state
   const [session, setSession] = useState<KYPGameSession | null>(null);
@@ -618,8 +631,10 @@ export default function KYPGamePage() {
   const [partnerAnswered, setPartnerAnswered] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
-  // Partner info
-  const [partnerInfo] = useState<{ name: string; avatar: string | null } | null>(null);
+  // Partner info (from location state or will be fetched)
+  const [partnerInfo] = useState<{ name: string; avatar: string | null } | null>(
+    partnerFromState ? { name: partnerFromState.displayName, avatar: partnerFromState.avatarUrl } : null
+  );
   
   // Timer
   const [timeRemaining, setTimeRemaining] = useState(0);

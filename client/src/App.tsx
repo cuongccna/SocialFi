@@ -16,6 +16,7 @@ import WalletPage from './pages/WalletPage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import GameHubPage from './pages/GameHubPage';
+import GameLeaderboardPage from './pages/GameLeaderboardPage';
 import KYPGamePage from './pages/KYPGamePage';
 import MiningGamePage from './pages/MiningGamePage';
 import CandleKissPage from './pages/CandleKissPage';
@@ -58,6 +59,7 @@ function App() {
           <Route path="/referrals" element={<ReferralsPage />} />
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/games" element={<GameHubPage />} />
+          <Route path="/games/leaderboard" element={<GameLeaderboardPage />} />
           <Route path="/games/kyp" element={<KYPGamePage />} />
           <Route path="/games/mining" element={<MiningGamePage />} />
           <Route path="/games/candle" element={<CandleKissPage />} />

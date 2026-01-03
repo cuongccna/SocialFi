@@ -23,6 +23,8 @@ import {
   type GameStats,
   type GameType,
 } from '../services/game.service';
+import PartnerSelectModal from '../components/PartnerSelectModal';
+import type { Match } from '../services/matches.service';
 
 // ============================================
 // Game Card Component
@@ -39,6 +41,11 @@ interface GameCardProps {
 function GameCard({ game, userStreak, tickets, onPlay, isLoading }: GameCardProps) {
   const { canPlay, reason } = canPlayGame(game, userStreak, tickets);
   const isLocked = game.requiredStreak > 0 && userStreak < game.requiredStreak;
+
+  const handleClick = () => {
+    console.log('GameCard button clicked for:', game.id, 'canPlay:', canPlay, 'isLoading:', isLoading);
+    onPlay();
+  };
 
   return (
     <motion.div
@@ -93,9 +100,13 @@ function GameCard({ game, userStreak, tickets, onPlay, isLoading }: GameCardProp
 
         {/* Play Button */}
         <button
-          onClick={onPlay}
+          onClick={(e) => {
+            e.stopPropagation();
+            console.log('Button onClick fired!');
+            handleClick();
+          }}
           disabled={!canPlay || isLoading}
-          className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+          className={`relative z-20 w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
             canPlay
               ? 'bg-gradient-to-r from-neon-purple to-neon-pink text-white hover:opacity-90'
               : 'bg-white/10 text-white/40 cursor-not-allowed'
@@ -232,6 +243,8 @@ export default function GameHubPage() {
   const [showRefillModal, setShowRefillModal] = useState(false);
   const [isRefilling, setIsRefilling] = useState(false);
   const [pendingGame, setPendingGame] = useState<GameType | null>(null);
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [selectedGameForPartner, setSelectedGameForPartner] = useState<GameType | null>(null);
 
   // Load game stats on mount
   useEffect(() => {
@@ -263,11 +276,17 @@ export default function GameHubPage() {
   };
 
   const handlePlayGame = async (gameType: GameType) => {
-    if (!stats) return;
+    console.log('handlePlayGame called with:', gameType);
+    if (!stats) {
+      console.log('No stats, returning');
+      return;
+    }
 
     const game = GAMES[gameType];
     const userStreak = stats.current_streak || user?.login_streak || 0;
     const { canPlay, reason } = canPlayGame(game, userStreak, stats.daily_tickets);
+
+    console.log('canPlay:', canPlay, 'reason:', reason);
 
     if (!canPlay) {
       if (reason === 'No tickets remaining') {
@@ -278,6 +297,19 @@ export default function GameHubPage() {
       }
       return;
     }
+
+    // Show partner selection modal
+    console.log('Setting showPartnerModal to true');
+    setSelectedGameForPartner(gameType);
+    setShowPartnerModal(true);
+  };
+
+  // Called after partner is selected
+  const handlePartnerSelected = async (partner: Match) => {
+    if (!selectedGameForPartner || !stats) return;
+
+    const gameType = selectedGameForPartner;
+    setShowPartnerModal(false);
 
     try {
       setIsPlayLoading(gameType);
@@ -292,13 +324,22 @@ export default function GameHubPage() {
           daily_tickets: result.remaining_tickets,
         } : null);
 
-        // Navigate to game screen
+        // Navigate to game screen with partner info
         haptic.notification('success');
-        // TODO: Navigate to actual game screen
-        // navigate(`/games/${gameType.toLowerCase()}`, { state: { sessionId: result.session_id } });
         
-        // For now, show a coming soon message
-        alert(`🎮 ${game.name} is coming soon! Session ID: ${result.session_id}`);
+        // Navigate to the appropriate game page
+        const gameRoute = gameType === 'CANDLE_KISS' ? 'candle' : gameType.toLowerCase();
+        navigate(`/games/${gameRoute}`, { 
+          state: { 
+            sessionId: result.session_id,
+            partner: {
+              id: partner.partner_id,
+              displayName: partner.display_name,
+              avatarUrl: partner.avatar_url,
+              relationshipId: partner.relationship_id,
+            }
+          } 
+        });
       } else {
         if (result.remaining_tickets === 0) {
           setPendingGame(gameType);
@@ -310,6 +351,7 @@ export default function GameHubPage() {
       haptic.notification('error');
     } finally {
       setIsPlayLoading(null);
+      setSelectedGameForPartner(null);
     }
   };
 
@@ -529,6 +571,18 @@ export default function GameHubPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Partner Select Modal */}
+      <PartnerSelectModal
+        isOpen={showPartnerModal}
+        onClose={() => {
+          setShowPartnerModal(false);
+          setSelectedGameForPartner(null);
+        }}
+        onSelect={handlePartnerSelected}
+        gameName={selectedGameForPartner ? GAMES[selectedGameForPartner].name : ''}
+        gameEmoji={selectedGameForPartner ? GAMES[selectedGameForPartner].emoji : '🎮'}
+      />
     </div>
   );
 }
