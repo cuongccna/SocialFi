@@ -88,9 +88,10 @@ async function startGame(req, res, next) {
     await client.query('BEGIN');
 
     // Verify relationship exists and user is part of it
+    // Allow both MATCHED and MINTED_CONTRACT status (not BURNED_CONTRACT)
     const relResult = await client.query(
       `SELECT * FROM relationships 
-       WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status = 'MATCHED'`,
+       WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status IN ('MATCHED', 'MINTED_CONTRACT')`,
       [relationship_id, userId]
     );
 
@@ -112,7 +113,19 @@ async function startGame(req, res, next) {
     );
 
     if (existingGame.rows.length > 0) {
-      throw new ApiError(400, 'You already have an active game');
+      const oldSessionId = existingGame.rows[0].id;
+      
+      // Check if the game is still in memory (active)
+      if (activeGames.has(oldSessionId)) {
+        throw new ApiError(400, 'You already have an active game');
+      }
+      
+      // Game exists in DB but not in memory (server restarted) - mark as completed
+      await client.query(
+        `UPDATE game_sessions SET completed = TRUE WHERE id = $1`,
+        [oldSessionId]
+      );
+      console.log(`Cleaned up stale game session: ${oldSessionId}`);
     }
 
     // Create game session
