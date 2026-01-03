@@ -749,18 +749,25 @@ export default function KYPGamePage() {
       setIsLoading(true);
       setError(null);
 
-      if (sessionId) {
-        // Join existing session
-        const state = await getGameState(sessionId);
-        setSession(state.session);
-        setRound(state.round);
-      } else if (relationshipId) {
+      // Always prioritize starting a new game with relationshipId
+      // The sessionId from useTicket is just a database record, not an active game
+      if (relationshipId) {
         // Start new game
         const response = await startKYPGame(relationshipId);
         if (response.success) {
           setSession(response.session);
         } else {
           setError(response.message || 'Failed to start game');
+        }
+      } else if (sessionId) {
+        // Try to join existing session (for rejoining active games)
+        try {
+          const state = await getGameState(sessionId);
+          setSession(state.session);
+          setRound(state.round);
+        } catch (stateErr) {
+          console.error('Game session not found or expired:', stateErr);
+          setError('Game session expired. Please start a new game.');
         }
       } else {
         setError('No relationship or session specified');
