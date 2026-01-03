@@ -6,6 +6,7 @@
 const { query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const { sendGameInvite } = require('../services/telegramBot');
+const { removeActiveGame } = require('./kypController');
 
 // ============================================
 // Constants
@@ -530,6 +531,9 @@ async function declineInvite(req, res, next) {
       `UPDATE game_sessions SET completed = TRUE WHERE id = $1`,
       [session_id]
     );
+
+    // Remove from activeGames (KYP memory store)
+    removeActiveGame(session_id);
 
     // Notify the inviter via Socket.io
     const io = req.app.get('io');

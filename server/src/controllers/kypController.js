@@ -964,6 +964,18 @@ function setupKYPSocketHandlers(io) {
   });
 }
 
+// ============================================
+// Remove game from activeGames (for external cleanup)
+// ============================================
+function removeActiveGame(sessionId) {
+  if (activeGames.has(sessionId)) {
+    activeGames.delete(sessionId);
+    console.log(`[KYP] Removed game ${sessionId} from activeGames. Remaining: ${activeGames.size}`);
+    return true;
+  }
+  return false;
+}
+
 module.exports = {
   startGame,
   joinGame,
@@ -973,4 +985,5 @@ module.exports = {
   getResults,
   generateShareImage,
   setupKYPSocketHandlers,
+  removeActiveGame,
 };
