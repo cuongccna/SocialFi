@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Flame, Heart, Trophy, User } from 'lucide-react';
+import { Home, Flame, Heart, Trophy, Gamepad2 } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/feed', icon: Flame, label: 'Trade' },
-  { to: '/leaderboard', icon: Trophy, label: 'Ranks' },
+  { to: '/games', icon: Gamepad2, label: 'Games' },
   { to: '/matches', icon: Heart, label: 'Matches' },
-  { to: '/profile', icon: User, label: 'Profile' },
+  { to: '/leaderboard', icon: Trophy, label: 'Ranks' },
 ];
 
 export default function BottomNav() {

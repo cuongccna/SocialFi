@@ -16,6 +16,7 @@ export interface User {
   is_active: boolean;
   last_active_at: string | null;
   boosted_until: string | null;
+  login_streak?: number; // For game unlocks
   created_at: string;
   updated_at: string;
 }

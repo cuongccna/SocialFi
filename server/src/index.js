@@ -25,6 +25,9 @@ const { initMarketMaker } = require('./workers/marketMaker');
 
 // Socket handlers
 const { initChatSocket } = require('./socket/chat');
+const { setupKYPSocketHandlers } = require('./controllers/kypController');
+const { setupMiningSocketHandlers } = require('./controllers/miningController');
+const { setupCandleKissSocketHandlers } = require('./controllers/candleKissController');
 
 // Middlewares
 const { notFound, errorHandler } = require('./middlewares');
@@ -147,6 +150,15 @@ async function startServer() {
   
   // Initialize Socket.io chat handlers
   initChatSocket(io);
+  
+  // Initialize KYP game socket handlers
+  setupKYPSocketHandlers(io);
+  
+  // Initialize Mining game socket handlers
+  setupMiningSocketHandlers(io);
+  
+  // Initialize Candle Kiss game socket handlers
+  setupCandleKissSocketHandlers(io);
   
   // Start HTTP server (for both Express + Socket.io)
   server.listen(config.port, () => {

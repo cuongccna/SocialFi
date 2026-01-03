@@ -128,6 +128,15 @@ async function sendMessage(req, res, next) {
     
     const newJointBalance = parseFloat(balanceResult.rows[0]?.joint_balance) || 0;
 
+    // Mining Stamina: Recharge +10 stamina per message sent
+    const STAMINA_PER_MESSAGE = 10;
+    const MAX_STAMINA = 100;
+    await pool.query(`
+      UPDATE users 
+      SET mining_stamina = LEAST(COALESCE(mining_stamina, $1) + $2, $1)
+      WHERE id = $3
+    `, [MAX_STAMINA, STAMINA_PER_MESSAGE, userId]);
+
     // Get sender info
     const sender = await pool.query(
       'SELECT display_name, avatar_url, telegram_id FROM users WHERE id = $1',
