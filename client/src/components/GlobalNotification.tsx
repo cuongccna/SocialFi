@@ -10,6 +10,7 @@ import { X, Gamepad2 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../utils/telegram';
+import { api } from '../api/axiosClient';
 import { 
   type GameInviteEvent, 
   getGameDisplayName, 
@@ -126,9 +127,23 @@ export default function GlobalNotification() {
     dismissNotification(notification.id);
   }, [navigate, dismissNotification]);
 
-  const handleIgnore = useCallback((id: string) => {
+  const handleIgnore = useCallback(async (notification: Notification) => {
     haptic.impact('light');
-    dismissNotification(id);
+    
+    // If it's a game invite, notify the inviter
+    if (notification.type === 'game_invite' && notification.data.gameId) {
+      try {
+        await api.post('/games/decline', {
+          session_id: notification.data.gameId,
+          game_type: notification.data.gameType,
+        });
+        console.log('🚫 Game invite declined, inviter notified');
+      } catch (err) {
+        console.error('Failed to decline invite:', err);
+      }
+    }
+    
+    dismissNotification(notification.id);
   }, [dismissNotification]);
 
   // Get the current notification to display (most recent)
@@ -185,7 +200,7 @@ export default function GlobalNotification() {
 
                   {/* Close button */}
                   <button
-                    onClick={() => handleIgnore(currentNotification.id)}
+                    onClick={() => handleIgnore(currentNotification)}
                     className="flex-shrink-0 p-1.5 rounded-full hover:bg-white/10 transition-colors"
                   >
                     <X className="w-4 h-4 text-white/60" />
@@ -195,7 +210,7 @@ export default function GlobalNotification() {
                 {/* Action buttons */}
                 <div className="flex gap-2 mt-4">
                   <button
-                    onClick={() => handleIgnore(currentNotification.id)}
+                    onClick={() => handleIgnore(currentNotification)}
                     className="flex-1 py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium transition-all active:scale-95"
                   >
                     Ignore ❌

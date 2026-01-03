@@ -486,6 +486,75 @@ async function sendInvite(req, res, next) {
   }
 }
 
+// ============================================
+// POST /games/decline - Decline a game invitation
+// ============================================
+async function declineInvite(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { session_id, game_type } = req.body;
+
+    if (!session_id) {
+      throw new ApiError(400, 'Session ID is required');
+    }
+
+    // Get the game session to find the inviter
+    const sessionResult = await query(
+      `SELECT gs.*, u.display_name as inviter_name
+       FROM game_sessions gs
+       JOIN users u ON u.id = gs.user_id
+       WHERE gs.id = $1 AND gs.partner_id = $2 AND gs.completed = FALSE`,
+      [session_id, userId]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      // Session might already be cleaned up, just return success
+      return res.json({
+        success: true,
+        message: 'Invite declined or already expired',
+      });
+    }
+
+    const session = sessionResult.rows[0];
+    const inviterId = session.user_id;
+
+    // Get decliner's name
+    const declinerResult = await query(
+      'SELECT display_name FROM users WHERE id = $1',
+      [userId]
+    );
+    const declinerName = declinerResult.rows[0]?.display_name || 'Partner';
+
+    // Mark session as completed (cancelled)
+    await query(
+      `UPDATE game_sessions SET completed = TRUE WHERE id = $1`,
+      [session_id]
+    );
+
+    // Notify the inviter via Socket.io
+    const io = req.app.get('io');
+    if (io) {
+      const inviterRoom = `user:${inviterId}`;
+      io.to(inviterRoom).emit('game_invite_declined', {
+        session_id,
+        game_type: session.game_type || game_type,
+        decliner_id: userId,
+        decliner_name: declinerName,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[GAME] 🚫 Decline notification sent to inviter room: ${inviterRoom}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'Invite declined',
+    });
+
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getGameStats,
   useTicket,
@@ -493,6 +562,7 @@ module.exports = {
   submitScore,
   getLeaderboard,
   sendInvite,
+  declineInvite,
   registerConnectedUser,
   unregisterConnectedUser,
   isUserConnected,

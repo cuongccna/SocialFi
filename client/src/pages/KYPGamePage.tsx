@@ -707,6 +707,29 @@ export default function KYPGamePage() {
     conversationId: session?.id,
   });
 
+  // Listen for invite declined event (when partner rejects)
+  useEffect(() => {
+    if (!socket || !session?.id) return;
+
+    const handleInviteDeclined = (data: { session_id: string; decliner_name: string }) => {
+      console.log('🚫 Game invite declined:', data);
+      if (data.session_id === session.id) {
+        haptic.notification('error');
+        setError(`${data.decliner_name} declined the game invite`);
+        // Navigate back after a delay
+        setTimeout(() => {
+          navigate(-1);
+        }, 2000);
+      }
+    };
+
+    socket.on('game_invite_declined', handleInviteDeclined);
+
+    return () => {
+      socket.off('game_invite_declined', handleInviteDeclined);
+    };
+  }, [socket, session?.id, navigate]);
+
   // Setup KYP-specific socket listeners
   useEffect(() => {
     if (!socket || !session?.id) return;

@@ -41,4 +41,7 @@ router.get('/leaderboard', gamesController.getLeaderboard);
 // POST /games/invite - Send game invitation to partner
 router.post('/invite', gamesController.sendInvite);
 
+// POST /games/decline - Decline a game invitation
+router.post('/decline', gamesController.declineInvite);
+
 module.exports = router;

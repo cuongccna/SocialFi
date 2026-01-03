@@ -72,6 +72,11 @@ export function useSocket(options: UseSocketOptions = {}) {
     socket.on('connect', () => {
       console.log('🔌 Socket connected:', socket.id);
       setIsConnected(true);
+      
+      // Register user for direct notifications (game invites, etc.)
+      if (user?.id) {
+        socket.emit('register_user', { user_id: user.id });
+      }
     });
 
     socket.on('disconnect', () => {
