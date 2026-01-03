@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Send, Loader2, MessageCircle, Heart, Coins, Smile
+  ArrowLeft, Send, Loader2, MessageCircle, Heart, Coins, Smile, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -12,10 +12,16 @@ import {
   type Message, 
   type Conversation 
 } from '../services/messages.service';
+import { 
+  getAISuggestions, 
+  isInsufficientBalanceError, 
+  AI_RIZZ_COST 
+} from '../services/ai.service';
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../utils/telegram';
 import { useSocket } from '../hooks/useSocket';
 import StickerPicker from '../components/StickerPicker';
+import RizzSuggestionSheet from '../components/RizzSuggestionSheet';
 import { type Sticker, STICKER_REWARD } from '../data/stickers';
 
 export default function ChatPage() {
@@ -37,6 +43,12 @@ export default function ChatPage() {
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const [floatingRewards, setFloatingRewards] = useState<{ id: number; x: number; y: number; amount: number }[]>([]);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
+  
+  // AI Rizz God state
+  const [showRizzSheet, setShowRizzSheet] = useState(false);
+  const [isLoadingRizz, setIsLoadingRizz] = useState(false);
+  const [rizzSuggestions, setRizzSuggestions] = useState<string[]>([]);
+  const [showLowBalanceAlert, setShowLowBalanceAlert] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -303,6 +315,49 @@ export default function ChatPage() {
         stopTyping();
       }, 2000);
     }
+  };
+
+  // Handle AI Rizz God request
+  const handleRizzMe = async () => {
+    if (!selectedConversation || isLoadingRizz) return;
+    
+    haptic.impact('medium');
+    setShowRizzSheet(true);
+    setIsLoadingRizz(true);
+    setRizzSuggestions([]);
+    
+    try {
+      const { suggestions, remainingBalance } = await getAISuggestions(
+        selectedConversation.partner_id
+      );
+      setRizzSuggestions(suggestions);
+      
+      // Could update user balance in auth context here if needed
+      console.log('💰 Remaining balance after Rizz:', remainingBalance);
+    } catch (err) {
+      console.error('Failed to get AI suggestions:', err);
+      
+      if (isInsufficientBalanceError(err)) {
+        // Show low balance alert
+        setShowRizzSheet(false);
+        setShowLowBalanceAlert(true);
+        haptic.notification('error');
+      } else {
+        haptic.notification('error');
+      }
+    } finally {
+      setIsLoadingRizz(false);
+    }
+  };
+
+  // Handle selection of a Rizz suggestion
+  const handleSelectRizzSuggestion = (suggestion: string) => {
+    setNewMessage(suggestion);
+    haptic.impact('light');
+    // Focus the input field
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   // Conversations List View
@@ -610,6 +665,16 @@ export default function ChatPage() {
             <Smile className="w-5 h-5 text-yellow-400" />
           </button>
           
+          {/* AI Rizz Me Button */}
+          <button
+            onClick={handleRizzMe}
+            disabled={isSending || isLoadingRizz}
+            className="p-3 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-purple-500/30"
+            title={`✨ Rizz Me (${AI_RIZZ_COST} $LOVE)`}
+          >
+            <Sparkles className="w-5 h-5 text-white" />
+          </button>
+          
           <input
             ref={inputRef}
             type="text"
@@ -642,6 +707,64 @@ export default function ChatPage() {
         onClose={() => setShowStickerPicker(false)}
         onSelectSticker={handleSendSticker}
       />
+
+      {/* AI Rizz Suggestion Sheet */}
+      <RizzSuggestionSheet
+        isOpen={showRizzSheet}
+        onClose={() => setShowRizzSheet(false)}
+        suggestions={rizzSuggestions}
+        onSelectSuggestion={handleSelectRizzSuggestion}
+        isLoading={isLoadingRizz}
+      />
+
+      {/* Low Balance Alert */}
+      <AnimatePresence>
+        {showLowBalanceAlert && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLowBalanceAlert(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-dark-100 rounded-2xl p-6 w-[90%] max-w-sm border border-white/10 shadow-xl"
+            >
+              <div className="text-center">
+                <div className="text-5xl mb-4">🚫</div>
+                <h3 className="text-xl font-bold mb-2">Low Balance!</h3>
+                <p className="text-white/60 mb-4">
+                  You need {AI_RIZZ_COST} $LOVE to summon the AI Rizz God.
+                </p>
+                <p className="text-sm text-white/40 mb-6">
+                  💡 Earn more $LOVE by chatting, completing tasks, or referring friends!
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLowBalanceAlert(false)}
+                    className="flex-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 transition-colors font-medium"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowLowBalanceAlert(false);
+                      navigate('/tasks');
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 font-medium"
+                  >
+                    Earn $LOVE
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       
       {/* Floating $LOVE Rewards */}
       <AnimatePresence>

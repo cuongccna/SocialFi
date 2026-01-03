@@ -32,5 +32,6 @@ router.use('/referrals', require('./referrals.routes'));
 router.use('/wallet', require('./wallet.routes'));
 router.use('/fud', require('./fud.routes'));
 router.use('/games', require('./games.routes'));
+router.use('/chat', require('./ai.routes'));
 
 module.exports = router;
