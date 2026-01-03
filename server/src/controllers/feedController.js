@@ -51,7 +51,9 @@ const getUserSelectFields = (includeDistance = true) => `
   u.boosted_until,
   u.is_vip,
   u.last_active_at,
-  CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted
+  u.created_at,
+  CASE WHEN u.boosted_until > NOW() THEN TRUE ELSE FALSE END AS is_boosted,
+  CASE WHEN u.created_at > NOW() - INTERVAL '24 HOURS' THEN TRUE ELSE FALSE END AS is_new_listing
 `;
 
 // ============================================
@@ -116,7 +118,9 @@ async function getFeed(req, res, next) {
           WHERE s.actor_id = $3 AND s.target_id = u.id
         )
       ORDER BY
-        -- Boosted profiles first
+        -- NEW LISTING: Profile IDO boost - new users (< 24h) appear first
+        CASE WHEN u.created_at > NOW() - INTERVAL '24 HOURS' THEN 0 ELSE 1 END,
+        -- Boosted profiles second
         CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END,
         -- Then by market price (hot profiles)
         u.market_price DESC,
@@ -161,7 +165,9 @@ async function getFeed(req, res, next) {
             WHERE s.actor_id = $3 AND s.target_id = u.id
           )
         ORDER BY
-          -- Boosted profiles first
+          -- NEW LISTING: Profile IDO boost - new users (< 24h) appear first
+          CASE WHEN u.created_at > NOW() - INTERVAL '24 HOURS' THEN 0 ELSE 1 END,
+          -- Boosted profiles second
           CASE WHEN u.boosted_until > NOW() THEN 0 ELSE 1 END,
           -- Sort by market price DESC (show "hot" profiles)
           u.market_price DESC,

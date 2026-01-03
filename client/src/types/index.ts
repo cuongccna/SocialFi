@@ -20,9 +20,10 @@ export interface User {
   updated_at: string;
 }
 
-// Feed user (includes distance)
+// Feed user (includes distance and IDO status)
 export interface FeedUser extends User {
   distance_km: number;
+  is_new_listing?: boolean; // Profile IDO - user created within 24 hours
 }
 
 // Swipe types

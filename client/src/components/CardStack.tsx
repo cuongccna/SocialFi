@@ -17,7 +17,7 @@ import {
   type PanInfo,
   AnimatePresence,
 } from 'framer-motion';
-import { TrendingUp, TrendingDown, MapPin, Wallet, HelpCircle, Sparkles, Lock } from 'lucide-react';
+import { TrendingUp, TrendingDown, MapPin, Wallet, HelpCircle, Sparkles, Lock, Rocket, Clock } from 'lucide-react';
 import { haptic } from '../utils/telegram';
 import { getAvatarUrl } from '../utils/helpers';
 import './HoloCard.css';
@@ -134,6 +134,76 @@ function FireworksEffect({ show, onComplete }: { show: boolean; onComplete: () =
       />
     </div>
   );
+}
+
+// ============================================
+// IDO Badge Component - New Listing Boost
+// ============================================
+
+function IDOBadge({ createdAt }: { createdAt: string }) {
+  const [timeRemaining, setTimeRemaining] = useState('');
+
+  useEffect(() => {
+    const calculateTimeRemaining = () => {
+      const created = new Date(createdAt).getTime();
+      const expiryTime = created + (24 * 60 * 60 * 1000); // 24 hours after creation
+      const now = Date.now();
+      const remaining = expiryTime - now;
+
+      if (remaining <= 0) {
+        setTimeRemaining('Ended');
+        return;
+      }
+
+      const hours = Math.floor(remaining / (1000 * 60 * 60));
+      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+      setTimeRemaining(`${hours}h:${minutes.toString().padStart(2, '0')}m`);
+    };
+
+    calculateTimeRemaining();
+    const interval = setInterval(calculateTimeRemaining, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  return (
+    <motion.div
+      className="absolute top-4 left-4 z-30 flex flex-col items-start gap-1"
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+    >
+      {/* IDO LIVE Badge */}
+      <motion.div
+        className="flex items-center gap-1.5 bg-red-600 text-white px-3 py-1.5 rounded-full shadow-lg"
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ duration: 1, repeat: Infinity }}
+      >
+        <Rocket className="w-4 h-4 animate-pulse" />
+        <span className="text-xs font-bold tracking-wide">🚀 IDO LIVE</span>
+      </motion.div>
+      
+      {/* Countdown Timer */}
+      <div className="flex items-center gap-1 bg-black/70 backdrop-blur-sm text-white/90 px-2 py-1 rounded-full text-xs">
+        <Clock className="w-3 h-3" />
+        <span>Ends in {timeRemaining}</span>
+      </div>
+    </motion.div>
+  );
+}
+
+// Check if user is a new listing (created within 24 hours)
+function isNewListing(profile: FeedUser): boolean {
+  if (profile.is_new_listing) return true;
+  
+  // Fallback: calculate from created_at
+  if (profile.created_at) {
+    const created = new Date(profile.created_at).getTime();
+    const now = Date.now();
+    const hoursDiff = (now - created) / (1000 * 60 * 60);
+    return hoursDiff < 24;
+  }
+  return false;
 }
 
 // ============================================
@@ -665,6 +735,11 @@ function SwipeCard({
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#12121a] via-[#12121a]/80 to-[#12121a]/30" />
         </div>
+
+        {/* IDO LIVE Badge - New Listing (< 24h) */}
+        {isNewListing(profile) && !showMystery && (
+          <IDOBadge createdAt={profile.created_at} />
+        )}
 
         {/* Whale Indicator */}
         {profile.wallet_rank === 'WHALE' && !showMystery && (

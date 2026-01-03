@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { RefreshCw, MapPin, Heart, X } from 'lucide-react';
+import { RefreshCw, MapPin, Heart, X, Rocket } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import CardStack, { type CardStackHandle } from '../components/CardStack';
 import MatchPopup from '../components/MatchPopup';
@@ -83,11 +83,101 @@ function ShortParticleEffect({ show, onComplete }: { show: boolean; onComplete: 
   );
 }
 
+// ============================================
+// IDO Welcome Modal - Profile Boost Notification
+// ============================================
+function IDOWelcomeModal({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        className="bg-gradient-to-b from-dark-100 to-dark-200 rounded-3xl p-6 max-w-sm w-full border border-primary/30 shadow-2xl"
+        initial={{ scale: 0.8, y: 50, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.8, y: 50, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Rocket Icon */}
+        <motion.div
+          className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center shadow-lg"
+          animate={{ 
+            y: [0, -10, 0],
+            rotate: [0, 5, -5, 0]
+          }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          <Rocket className="w-10 h-10 text-white" />
+        </motion.div>
+
+        {/* Title */}
+        <h2 className="text-2xl font-black text-center text-white mb-2">
+          🎉 IDO ACTIVATED!
+        </h2>
+
+        {/* Description */}
+        <p className="text-center text-white/80 mb-4">
+          Your profile is <span className="text-primary font-bold">boosted to the TOP</span> for the next{' '}
+          <span className="text-neon-yellow font-bold">24 hours</span>!
+        </p>
+
+        {/* Tips */}
+        <div className="bg-white/5 rounded-xl p-4 mb-6">
+          <p className="text-sm text-white/60 mb-2">💡 Pro Tips:</p>
+          <ul className="text-sm text-white/80 space-y-1.5">
+            <li>• Upload a great photo to maximize your Market Cap 📸</li>
+            <li>• Complete your bio to attract more investors 📝</li>
+            <li>• Be active to stay on top! 🔥</li>
+          </ul>
+        </div>
+
+        {/* Countdown hint */}
+        <div className="flex items-center justify-center gap-2 text-xs text-white/50 mb-4">
+          <motion.div
+            className="w-2 h-2 bg-red-500 rounded-full"
+            animate={{ scale: [1, 1.3, 1] }}
+            transition={{ duration: 1, repeat: Infinity }}
+          />
+          <span>Other users see "🚀 IDO LIVE" on your profile</span>
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="w-full py-3 bg-gradient-to-r from-primary to-neon-green text-dark font-bold rounded-xl hover:opacity-90 transition-opacity"
+        >
+          Let's Go! 🚀
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// Helper: Check if user is new (created within 24 hours)
+function isNewUser(createdAt: string | undefined): boolean {
+  if (!createdAt) return false;
+  const created = new Date(createdAt).getTime();
+  const now = Date.now();
+  const hoursDiff = (now - created) / (1000 * 60 * 60);
+  return hoursDiff < 24;
+}
+
+// Storage key for tracking if we've shown the IDO welcome
+const IDO_WELCOME_SHOWN_KEY = 'cryptocrush_ido_welcome_shown';
+
 export default function FeedPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<FeedUser[]>([]);
   const [isEmpty, setIsEmpty] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // IDO Welcome modal state
+  const [showIDOWelcome, setShowIDOWelcome] = useState(false);
   const [swipeCount, setSwipeCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false); // Prevent button spam
@@ -115,6 +205,24 @@ export default function FeedPage() {
   // Load feed on mount
   useEffect(() => {
     loadFeed();
+  }, [user]);
+
+  // Check and show IDO Welcome for new users
+  useEffect(() => {
+    if (user && isNewUser(user.created_at)) {
+      // Check if we've already shown the welcome
+      const shownKey = `${IDO_WELCOME_SHOWN_KEY}_${user.id}`;
+      const alreadyShown = localStorage.getItem(shownKey);
+      
+      if (!alreadyShown) {
+        // Show the welcome modal with a small delay for better UX
+        const timer = setTimeout(() => {
+          setShowIDOWelcome(true);
+          localStorage.setItem(shownKey, 'true');
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    }
   }, [user]);
 
   // Load feed from API
@@ -496,6 +604,13 @@ export default function FeedPage() {
           </motion.button>
         </div>
       </div>
+
+      {/* IDO Welcome Modal for New Users */}
+      <AnimatePresence>
+        {showIDOWelcome && (
+          <IDOWelcomeModal onClose={() => setShowIDOWelcome(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
