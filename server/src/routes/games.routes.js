@@ -38,4 +38,7 @@ router.post('/submit-score', gamesController.submitScore);
 // GET /games/leaderboard - Get game leaderboard
 router.get('/leaderboard', gamesController.getLeaderboard);
 
+// POST /games/invite - Send game invitation to partner
+router.post('/invite', gamesController.sendInvite);
+
 module.exports = router;

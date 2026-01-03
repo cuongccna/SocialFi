@@ -1,8 +1,7 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth, AuthLoadingScreen, AuthErrorScreen } from './context/AuthContext';
 
 // Pages
-import HomePage from './pages/HomePage';
 import FeedPage from './pages/FeedPage';
 import ProfilePage from './pages/ProfilePage';
 import MatchesPage from './pages/MatchesPage';
@@ -20,12 +19,16 @@ import GameLeaderboardPage from './pages/GameLeaderboardPage';
 import KYPGamePage from './pages/KYPGamePage';
 import MiningGamePage from './pages/MiningGamePage';
 import CandleKissPage from './pages/CandleKissPage';
+import EarnHub from './pages/EarnHub';
 
 // Layout
 import BottomNav from './components/layout/BottomNav';
 
+// Global Components
+import GlobalNotification from './components/GlobalNotification';
+
 function App() {
-  const { user, isLoading, isAuthenticated, error } = useAuth();
+  const { isLoading, isAuthenticated, error } = useAuth();
 
   // Show loading screen while authenticating
   if (isLoading) {
@@ -44,10 +47,14 @@ function App() {
 
   return (
     <div className="h-full flex flex-col bg-dark">
+      {/* Global Notifications (Game Invites, etc.) */}
+      <GlobalNotification />
+      
       {/* Main content area */}
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <Routes>
-          <Route path="/" element={<HomePage user={user} />} />
+          {/* Default redirect to Feed (Explore tab) */}
+          <Route path="/" element={<Navigate to="/feed" replace />} />
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/matches" element={<MatchesPage />} />
@@ -63,6 +70,7 @@ function App() {
           <Route path="/games/kyp" element={<KYPGamePage />} />
           <Route path="/games/mining" element={<MiningGamePage />} />
           <Route path="/games/candle" element={<CandleKissPage />} />
+          <Route path="/earn" element={<EarnHub />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Routes>

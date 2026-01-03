@@ -329,15 +329,50 @@ async function getBoostStatus(req, res, next) {
   }
 }
 
-module.exports = {
-  getUserStats,
-  getCurrentUser,
-  updateProfile,
-  getUserById,
-  boostProfile,
-  getBoostStatus,
-  uploadAvatar,
-};
+/**
+ * GET /users/badge-status
+ * Get notification badge counts for bottom navigation
+ */
+async function getBadgeStatus(req, res, next) {
+  try {
+    const userId = req.user.id;
+
+    const [unreadMessages, unclaimedTasks, pendingInvites] = await Promise.all([
+      // Count unread messages across all relationships
+      pool.query(`
+        SELECT COUNT(*) as count 
+        FROM messages m
+        JOIN relationships r ON m.relationship_id = r.id
+        WHERE (r.user_a = $1 OR r.user_b = $1)
+          AND m.sender_id != $1
+          AND m.is_read = FALSE
+          AND r.status != 'BURNED_CONTRACT'
+      `, [userId]),
+      
+      // Count unclaimed task rewards (completed but reward not yet claimed)
+      pool.query(`
+        SELECT COUNT(*) as count 
+        FROM user_tasks 
+        WHERE user_id = $1 
+          AND reward_claimed = FALSE
+      `, [userId]),
+      
+      // Pending game invites are tracked in-memory via socket, return 0 from DB
+      // This could be enhanced with a game_invites table if needed
+      Promise.resolve({ rows: [{ count: 0 }] }),
+    ]);
+
+    res.json({
+      success: true,
+      unread_messages: parseInt(unreadMessages.rows[0].count) || 0,
+      unclaimed_tasks: parseInt(unclaimedTasks.rows[0].count) || 0,
+      pending_game_invites: parseInt(pendingInvites.rows[0].count) || 0,
+    });
+
+  } catch (err) {
+    next(err);
+  }
+}
 
 /**
  * POST /users/avatar
@@ -423,3 +458,14 @@ async function uploadAvatar(req, res, next) {
     client.release();
   }
 }
+
+module.exports = {
+  getUserStats,
+  getCurrentUser,
+  updateProfile,
+  getUserById,
+  boostProfile,
+  getBoostStatus,
+  uploadAvatar,
+  getBadgeStatus,
+};

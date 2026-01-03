@@ -6,6 +6,7 @@ import App from './App.tsx'
 import './index.css'
 import { initTelegramWebApp } from './utils/telegram'
 import { AuthProvider } from './context/AuthContext'
+import { NotificationProvider } from './context/NotificationContext'
 
 // Initialize Telegram WebApp SDK
 initTelegramWebApp();
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <TonConnectUIProvider manifestUrl={manifestUrl}>
         <AuthProvider>
-          <App />
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
         </AuthProvider>
       </TonConnectUIProvider>
     </BrowserRouter>

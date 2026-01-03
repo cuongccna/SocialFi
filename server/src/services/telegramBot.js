@@ -335,6 +335,53 @@ function getBot() {
   return bot;
 }
 
+/**
+ * Send a game invitation to a user via Telegram
+ * @param {number} recipientTelegramId - Recipient's Telegram ID
+ * @param {string} inviterName - Name of the user who sent the invite
+ * @param {string} gameType - Type of game (KYP, MINING, CANDLE_KISS)
+ * @param {string} roomId - Game room/session ID
+ */
+async function sendGameInvite(recipientTelegramId, inviterName, gameType, roomId) {
+  if (!bot) {
+    console.warn('⚠️  Bot not initialized. Game invite not sent via Telegram.');
+    return { success: false, reason: 'Bot not initialized' };
+  }
+
+  // Map game types to friendly names
+  const gameNames = {
+    'KYP': 'Know Your Partner 💕',
+    'MINING': 'Love Mining ⛏️',
+    'CANDLE_KISS': 'Candle Kiss 💋',
+  };
+  const gameName = gameNames[gameType] || gameType;
+
+  const botUsername = (await bot.api.getMe()).username;
+  const deepLink = `https://t.me/${botUsername}/app?startapp=game_${roomId}`;
+
+  const message = 
+    `🎮 <b>GAME CHALLENGE!</b> 🎮\n\n` +
+    `<b>${inviterName}</b> is waiting for you in <b>${gameName}</b>!\n\n` +
+    `Don't let them wait! 🔥`;
+
+  try {
+    const result = await bot.api.sendMessage(recipientTelegramId, message, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🚀 JOIN GAME NOW', url: deepLink }
+        ]]
+      }
+    });
+
+    console.log(`✅ Game invite sent to ${recipientTelegramId} for game ${roomId}`);
+    return { success: true, messageId: result.message_id };
+  } catch (err) {
+    console.error(`❌ Failed to send game invite to ${recipientTelegramId}:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 module.exports = {
   initBot,
   getBot,
@@ -342,4 +389,5 @@ module.exports = {
   sendAnonymousMessage,
   sendBlurredImage,
   sendMatchNotification,
+  sendGameInvite,
 };

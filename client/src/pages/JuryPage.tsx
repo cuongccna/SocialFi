@@ -85,9 +85,17 @@ export default function JuryPage() {
         api.get<StatsResponse>('/disputes/stats'),
       ]);
 
-      // Filter out already voted disputes
+      // Filter out already voted disputes AND expired disputes
       const allDisputes = disputesRes?.disputes || [];
-      const openDisputes = allDisputes.filter((d: Dispute) => !d.user_vote);
+      const openDisputes = allDisputes.filter((d: Dispute) => {
+        // Skip if already voted
+        if (d.user_vote) return false;
+        // Skip if expired
+        const now = new Date();
+        const expiry = new Date(d.expiry_date);
+        if (expiry.getTime() <= now.getTime()) return false;
+        return true;
+      });
       setDisputes(openDisputes);
       setStats(statsRes?.stats || null);
       setCurrentIndex(0);
@@ -401,20 +409,28 @@ export default function JuryPage() {
           )}
         </AnimatePresence>
 
-        {/* Swipe Hints */}
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-between px-8">
-          <motion.div 
-            className="bg-neon-red/20 p-4 rounded-full"
-            animate={{ opacity: swipeDirection === 'left' ? 1 : 0.3 }}
+        {/* Swipe Hints - NOW CLICKABLE */}
+        <div className="absolute inset-0 flex items-center justify-between px-8 z-10">
+          <motion.button 
+            onClick={() => { if (!voting) { setSwipeDirection('left'); handleVote('PLAINTIFF'); }}}
+            disabled={voting}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="bg-neon-red/30 p-4 rounded-full hover:bg-neon-red/50 transition-colors disabled:opacity-50 cursor-pointer"
+            style={{ opacity: swipeDirection === 'left' ? 1 : 0.5 }}
           >
-            <ThumbsUp className="w-8 h-8 text-neon-red" />
-          </motion.div>
-          <motion.div 
-            className="bg-neon-green/20 p-4 rounded-full"
-            animate={{ opacity: swipeDirection === 'right' ? 1 : 0.3 }}
+            <ThumbsUp className="w-8 h-8 text-neon-red transform -scale-x-100" />
+          </motion.button>
+          <motion.button 
+            onClick={() => { if (!voting) { setSwipeDirection('right'); handleVote('DEFENDANT'); }}}
+            disabled={voting}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            className="bg-neon-green/30 p-4 rounded-full hover:bg-neon-green/50 transition-colors disabled:opacity-50 cursor-pointer"
+            style={{ opacity: swipeDirection === 'right' ? 1 : 0.5 }}
           >
             <ThumbsUp className="w-8 h-8 text-neon-green" />
-          </motion.div>
+          </motion.button>
         </div>
       </div>
 

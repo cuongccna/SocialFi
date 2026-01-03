@@ -15,6 +15,7 @@ const {
   boostProfile,
   getBoostStatus,
   uploadAvatar,
+  getBadgeStatus,
 } = require('../controllers/usersController');
 
 // Configure multer for memory storage (we'll handle file saving manually)
@@ -38,6 +39,9 @@ router.use(authMiddleware);
 
 // GET /users/stats - Get current user's activity stats
 router.get('/stats', getUserStats);
+
+// GET /users/badge-status - Get notification badge counts
+router.get('/badge-status', getBadgeStatus);
 
 // GET /users/me - Get current user's full profile
 router.get('/me', getCurrentUser);

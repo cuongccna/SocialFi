@@ -4,6 +4,7 @@
  */
 
 const { pool } = require('../config/db');
+const { registerConnectedUser, unregisterConnectedUser } = require('../controllers/gamesController');
 
 // Constants
 const LOVE_PER_TEXT_MESSAGE = 0.1;
@@ -21,6 +22,20 @@ function initChatSocket(io) {
     
     // Track which rooms this socket has joined
     const joinedRooms = new Set();
+    // Track this socket's user ID for cleanup on disconnect
+    let socketUserId = null;
+
+    // ==========================================
+    // Register User (for game invite tracking)
+    // ==========================================
+    socket.on('register_user', (data) => {
+      const { user_id } = data;
+      if (user_id) {
+        socketUserId = user_id;
+        registerConnectedUser(user_id, socket.id);
+        socket.emit('registered', { success: true });
+      }
+    });
 
     // ==========================================
     // Join Room
@@ -32,6 +47,12 @@ function initChatSocket(io) {
         if (!relationship_id || !user_id) {
           socket.emit('error', { message: 'relationship_id and user_id are required' });
           return;
+        }
+
+        // Also register this user for game invites
+        if (!socketUserId && user_id) {
+          socketUserId = user_id;
+          registerConnectedUser(user_id, socket.id);
         }
 
         // Verify user is part of this relationship
@@ -212,6 +233,11 @@ function initChatSocket(io) {
     // ==========================================
     socket.on('disconnect', () => {
       console.log(`❌ Client disconnected: ${socket.id}`);
+      
+      // Unregister user from connected users tracking
+      if (socketUserId) {
+        unregisterConnectedUser(socketUserId, socket.id);
+      }
       
       // Notify all rooms this socket was in
       joinedRooms.forEach(roomName => {

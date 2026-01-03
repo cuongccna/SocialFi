@@ -5,12 +5,16 @@
 
 const { query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
+const { sendGameInvite } = require('../services/telegramBot');
 
 // ============================================
 // Constants
 // ============================================
 const MAX_DAILY_TICKETS = 3;
 const TICKET_REFILL_COST = 50; // $LOVE
+
+// In-memory map to track connected users (userId -> Set of socket IDs)
+const connectedUsers = new Map();
 
 // ============================================
 // GET /games/stats - Get user's game statistics
@@ -346,10 +350,151 @@ async function getLeaderboard(req, res, next) {
   }
 }
 
+// ============================================
+// Connected Users Tracking (for Socket.io)
+// ============================================
+
+/**
+ * Register a user as connected
+ * @param {string} userId - User ID
+ * @param {string} socketId - Socket ID
+ */
+function registerConnectedUser(userId, socketId) {
+  if (!connectedUsers.has(userId)) {
+    connectedUsers.set(userId, new Set());
+  }
+  connectedUsers.get(userId).add(socketId);
+  console.log(`📱 User ${userId} connected (socket: ${socketId}). Total connections: ${connectedUsers.get(userId).size}`);
+}
+
+/**
+ * Unregister a user's socket
+ * @param {string} userId - User ID
+ * @param {string} socketId - Socket ID
+ */
+function unregisterConnectedUser(userId, socketId) {
+  if (connectedUsers.has(userId)) {
+    connectedUsers.get(userId).delete(socketId);
+    if (connectedUsers.get(userId).size === 0) {
+      connectedUsers.delete(userId);
+    }
+    console.log(`📴 User ${userId} socket disconnected (${socketId})`);
+  }
+}
+
+/**
+ * Check if a user is currently connected via Socket.io
+ * @param {string} userId - User ID
+ * @returns {boolean} - True if user has at least one active socket connection
+ */
+function isUserConnected(userId) {
+  return connectedUsers.has(userId) && connectedUsers.get(userId).size > 0;
+}
+
+/**
+ * Get connected users map (for socket handlers)
+ */
+function getConnectedUsers() {
+  return connectedUsers;
+}
+
+// ============================================
+// POST /games/invite - Send game invitation
+// ============================================
+async function sendInvite(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { partner_id, game_type, room_id } = req.body;
+
+    if (!partner_id || !game_type) {
+      throw new ApiError(400, 'Partner ID and game type are required');
+    }
+
+    // Get inviter's info
+    const inviterResult = await query(
+      'SELECT display_name FROM users WHERE id = $1',
+      [userId]
+    );
+    const inviterName = inviterResult.rows[0]?.display_name || 'Someone';
+
+    // Get partner's info (including telegram_id)
+    const partnerResult = await query(
+      'SELECT id, display_name, telegram_id FROM users WHERE id = $1',
+      [partner_id]
+    );
+
+    if (partnerResult.rows.length === 0) {
+      throw new ApiError(404, 'Partner not found');
+    }
+
+    const partner = partnerResult.rows[0];
+    const io = req.app.get('io');
+    let deliveryMethod = null;
+
+    // Check if partner is online via Socket.io
+    if (isUserConnected(partner_id)) {
+      // Partner is online - emit socket event
+      const socketIds = connectedUsers.get(partner_id);
+      socketIds.forEach(socketId => {
+        io.to(socketId).emit('game_invite', {
+          gameId: room_id || `pending_${Date.now()}`,
+          inviterName,
+          inviterId: userId,
+          gameType: game_type,
+          timestamp: new Date().toISOString(),
+        });
+      });
+      
+      console.log(`🎮 Game invite sent via socket to ${partner.display_name} (${socketIds.size} connections)`);
+      deliveryMethod = 'socket';
+    } else {
+      // Partner is offline - send via Telegram bot
+      if (partner.telegram_id) {
+        const result = await sendGameInvite(
+          partner.telegram_id,
+          inviterName,
+          game_type,
+          room_id || `pending_${Date.now()}`
+        );
+        
+        if (result.success) {
+          console.log(`🎮 Game invite sent via Telegram to ${partner.display_name}`);
+          deliveryMethod = 'telegram';
+        } else {
+          console.warn(`⚠️ Failed to send Telegram invite: ${result.error || result.reason}`);
+          deliveryMethod = 'failed';
+        }
+      } else {
+        console.warn(`⚠️ Partner ${partner_id} has no telegram_id`);
+        deliveryMethod = 'no_telegram';
+      }
+    }
+
+    res.json({
+      success: true,
+      delivery_method: deliveryMethod,
+      partner_name: partner.display_name,
+      message: deliveryMethod === 'socket' 
+        ? `Invite sent to ${partner.display_name}!`
+        : deliveryMethod === 'telegram'
+        ? `${partner.display_name} is offline. Invite sent via Telegram!`
+        : `${partner.display_name} is offline and couldn't be notified.`,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getGameStats,
   useTicket,
   refillTickets,
   submitScore,
   getLeaderboard,
+  sendInvite,
+  registerConnectedUser,
+  unregisterConnectedUser,
+  isUserConnected,
+  getConnectedUsers,
 };

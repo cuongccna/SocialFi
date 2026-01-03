@@ -17,30 +17,44 @@
   box-sizing: border-box;
 }
 
-html, body {
-  height: 100%;
-  width: 100%;
-}
-
-#root {
-  height: 100%;
+html {
+  /* Use Telegram viewport height, fallback to 100vh */
+  height: var(--tg-viewport-stable-height, 100vh);
   width: 100%;
   overflow: hidden;
 }
 
 body {
+  height: 100%;
+  width: 100%;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: var(--color-dark);
   color: white;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   
-  /* Telegram Mini App specific */
+  /* Telegram Mini App specific - Prevent rubber-banding */
+  overflow: hidden;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  
+  /* Prevent text selection and tap highlights */
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  
+  /* Prevent pull-to-refresh */
+  overscroll-behavior-y: contain;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  /* Allow internal scrolling within the app */
+  display: flex;
+  flex-direction: column;
 }
 
 /* Custom scrollbar */
