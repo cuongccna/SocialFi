@@ -1055,6 +1055,25 @@ export default function CandleKissPage() {
             stake={session.stake_amount}
           />
         )}
+
+        {/* Settlement Loading - when phase is SETTLED but result not yet received */}
+        {phase === 'SETTLED' && !showResult && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-12"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="text-6xl mb-4"
+            >
+              🕯️
+            </motion.div>
+            <h2 className="text-xl font-bold text-white mb-2">Settling...</h2>
+            <p className="text-white/60 text-center">Calculating your result...</p>
+          </motion.div>
+        )}
       </div>
 
       {/* Bottom Info */}
