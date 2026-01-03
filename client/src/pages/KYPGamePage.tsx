@@ -756,6 +756,19 @@ export default function KYPGamePage() {
         const response = await startKYPGame(relationshipId);
         if (response.success) {
           setSession(response.session);
+          console.log('Game started/joined:', response.session, 'joined:', response.joined);
+          
+          // If we joined an existing game that's in BETTING phase, we need to get the round info
+          if (response.joined && response.session.phase === 'BETTING') {
+            // Fetch the full game state to get round info
+            try {
+              const state = await getGameState(response.session.id);
+              setSession(state.session);
+              setRound(state.round);
+            } catch (stateErr) {
+              console.log('Could not fetch round state, waiting for socket update');
+            }
+          }
         } else {
           setError(response.message || 'Failed to start game');
         }

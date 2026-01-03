@@ -78,16 +78,19 @@ export interface KYPGameResult {
 
 /**
  * Start a new KYP game session with a partner
+ * If a game already exists with this partner, it will join that game instead
  */
 export async function startKYPGame(relationshipId: string): Promise<{
   success: boolean;
   session: KYPGameSession;
   message?: string;
+  joined?: boolean;  // true if joined existing game instead of creating new
 }> {
   const response = await api.post<{
     success: boolean;
     session: KYPGameSession;
     message?: string;
+    joined?: boolean;
   }>('/games/kyp/start', { relationship_id: relationshipId });
   return response;
 }

@@ -102,30 +102,66 @@ async function startGame(req, res, next) {
     const relationship = relResult.rows[0];
     const partnerId = relationship.user_a === userId ? relationship.user_b : relationship.user_a;
 
-    // Check for existing active game
+    // Check for existing active game between these two users
     const existingGame = await client.query(
       `SELECT id FROM game_sessions 
-       WHERE (user_id = $1 OR partner_id = $1) 
+       WHERE ((user_id = $1 AND partner_id = $2) OR (user_id = $2 AND partner_id = $1))
        AND game_type = 'KYP' 
        AND completed = FALSE 
        AND created_at > NOW() - INTERVAL '1 hour'`,
-      [userId]
+      [userId, partnerId]
     );
 
     if (existingGame.rows.length > 0) {
-      const oldSessionId = existingGame.rows[0].id;
+      const existingSessionId = existingGame.rows[0].id;
       
       // Check if the game is still in memory (active)
-      if (activeGames.has(oldSessionId)) {
-        throw new ApiError(400, 'You already have an active game');
+      if (activeGames.has(existingSessionId)) {
+        const game = activeGames.get(existingSessionId);
+        console.log('[KYP START] Found existing active game, joining instead:', existingSessionId);
+        
+        // If this user is joining an existing game, transition to BETTING phase
+        if (game.phase === 'WAITING') {
+          game.phase = 'BETTING';
+          game.current_round = 1;
+          console.log('[KYP START] Game phase changed to BETTING');
+        }
+
+        await client.query('COMMIT');
+
+        // Get partner info
+        const partnerResult = await query(
+          `SELECT display_name, avatar_url FROM users WHERE id = $1`,
+          [partnerId]
+        );
+
+        return res.json({
+          success: true,
+          session: {
+            id: game.id,
+            relationship_id: game.relationship_id,
+            player_a_id: game.player_a_id,
+            player_b_id: game.player_b_id,
+            current_round: game.current_round,
+            total_rounds: game.total_rounds,
+            phase: game.phase,
+            pot: game.pot,
+            player_a_score: game.player_a_score,
+            player_b_score: game.player_b_score,
+            matches: game.matches,
+            created_at: game.created_at,
+          },
+          partner: partnerResult.rows[0] || null,
+          joined: true,  // Flag to indicate this is a join, not a new game
+        });
       }
       
       // Game exists in DB but not in memory (server restarted) - mark as completed
       await client.query(
         `UPDATE game_sessions SET completed = TRUE WHERE id = $1`,
-        [oldSessionId]
+        [existingSessionId]
       );
-      console.log(`Cleaned up stale game session: ${oldSessionId}`);
+      console.log(`[KYP START] Cleaned up stale game session: ${existingSessionId}`);
     }
 
     // Create game session
@@ -566,6 +602,9 @@ async function generateShareImage(req, res, next) {
 // ============================================
 
 function setupKYPSocketHandlers(io) {
+  // Store io instance for use in controllers
+  module.exports.io = io;
+  
   io.on('connection', (socket) => {
     // Join KYP game room
     socket.on('kyp:join', ({ session_id }) => {
@@ -574,14 +613,24 @@ function setupKYPSocketHandlers(io) {
       
       const game = activeGames.get(session_id);
       if (game) {
+        const currentRound = game.questions[game.current_round - 1] ? {
+          round_number: game.current_round,
+          question: game.questions[game.current_round - 1],
+          phase: game.phase,
+          time_remaining: CONFIG.TIME_TO_ANSWER,
+        } : null;
+        
+        // Send state to the joining user
         socket.emit('kyp:state', {
           session: game,
-          round: game.questions[game.current_round - 1] ? {
-            round_number: game.current_round,
-            question: game.questions[game.current_round - 1],
-            phase: game.phase,
-            time_remaining: CONFIG.TIME_TO_ANSWER,
-          } : null,
+          round: currentRound,
+        });
+        
+        // Broadcast to ALL users in the room (including existing ones) that someone joined
+        // This helps update all clients when game state changes (e.g., phase to BETTING)
+        io.to(`kyp:${session_id}`).emit('kyp:phase', {
+          phase: game.phase,
+          round: currentRound,
         });
       }
     });
