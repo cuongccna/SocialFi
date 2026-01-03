@@ -733,23 +733,44 @@ export default function CandleKissPage() {
       setIsLoading(true);
       setError(null);
 
-      if (sessionIdParam) {
-        const state = await getCandleKissState(sessionIdParam);
-        setSession(state.session);
-        setCurrentPrice(state.current_price);
-        setPhase(state.session.phase);
+      // Always prioritize starting with relationshipId (like KYP game)
+      if (relationshipId) {
+        const result = await startCandleKissSession(relationshipId, stake);
+        setSession(result.session);
+        // current_price comes from session object in response
+        if ('current_price' in result.session) {
+          setCurrentPrice((result.session as unknown as { current_price: number }).current_price || 0);
+        }
+        console.log('Candle Kiss session started/joined:', result.session, 'joined:', result.joined);
         
-        if (state.session.phase === 'LOCKED' && state.session.lock_start_time) {
-          // Calculate remaining time
-          const lockStart = new Date(state.session.lock_start_time).getTime();
+        // If joined existing game in LOCKED phase
+        if (result.session.phase === 'LOCKED' && result.session.lock_start_time) {
+          setPhase('LOCKED');
+          const lockStart = new Date(result.session.lock_start_time).getTime();
           const elapsed = Math.floor((Date.now() - lockStart) / 1000);
           const remaining = Math.max(0, CANDLE_CONFIG.LOCK_DURATION_SECONDS - elapsed);
           setTimeRemaining(remaining);
           if (remaining > 0) startCountdown();
         }
-      } else if (relationshipId) {
-        const { session: newSession } = await startCandleKissSession(relationshipId, stake);
-        setSession(newSession);
+      } else if (sessionIdParam) {
+        // Only use sessionId if no relationshipId (for rejoining)
+        try {
+          const state = await getCandleKissState(sessionIdParam);
+          setSession(state.session);
+          setCurrentPrice(state.current_price);
+          setPhase(state.session.phase);
+          
+          if (state.session.phase === 'LOCKED' && state.session.lock_start_time) {
+            const lockStart = new Date(state.session.lock_start_time).getTime();
+            const elapsed = Math.floor((Date.now() - lockStart) / 1000);
+            const remaining = Math.max(0, CANDLE_CONFIG.LOCK_DURATION_SECONDS - elapsed);
+            setTimeRemaining(remaining);
+            if (remaining > 0) startCountdown();
+          }
+        } catch (stateErr) {
+          console.error('Candle Kiss session not found, expired:', stateErr);
+          setError('Session expired. Please start a new game.');
+        }
       } else {
         throw new Error('No relationship or session ID provided');
       }

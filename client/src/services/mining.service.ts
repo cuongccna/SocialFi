@@ -88,10 +88,12 @@ export const MINING_CONFIG = {
 
 /**
  * Start a new mining session with partner
+ * If a session already exists with this partner, it will join that session instead
  */
 export async function startMiningSession(relationshipId: string): Promise<{
   session: MiningSession;
   stamina: number;
+  joined?: boolean;
 }> {
   return api.post('/games/mining/start', {
     relationship_id: relationshipId,

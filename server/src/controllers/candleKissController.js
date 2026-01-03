@@ -91,6 +91,8 @@ async function startSession(req, res, next) {
     const userId = req.user.id;
     const { relationship_id, stake_amount = 50 } = req.body;
 
+    console.log('[CANDLE START] Request:', { userId, relationship_id, stake_amount });
+
     if (!relationship_id) {
       throw new ApiError(400, 'Relationship ID required');
     }
@@ -99,10 +101,10 @@ async function startSession(req, res, next) {
 
     await client.query('BEGIN');
 
-    // Verify relationship
+    // Verify relationship - allow both MATCHED and MINTED_CONTRACT
     const relResult = await client.query(
       `SELECT * FROM relationships 
-       WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status = 'MATCHED'`,
+       WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status IN ('MATCHED', 'MINTED_CONTRACT')`,
       [relationship_id, userId]
     );
 
@@ -112,6 +114,47 @@ async function startSession(req, res, next) {
 
     const relationship = relResult.rows[0];
     const partnerId = relationship.user_a === userId ? relationship.user_b : relationship.user_a;
+
+    // Check for existing active session between these two users
+    const existingSessions = await client.query(
+      `SELECT id FROM game_sessions 
+       WHERE ((user_id = $1 AND partner_id = $2) OR (user_id = $2 AND partner_id = $1))
+       AND game_type = 'CANDLE_KISS' 
+       AND completed = FALSE 
+       AND created_at > NOW() - INTERVAL '1 hour'`,
+      [userId, partnerId]
+    );
+
+    console.log('[CANDLE START] Found existing sessions:', existingSessions.rows.length);
+
+    if (existingSessions.rows.length > 0) {
+      // Check if any session is in memory (active)
+      for (const row of existingSessions.rows) {
+        const sessionId = row.id;
+        if (activeSessions.has(sessionId)) {
+          console.log('[CANDLE START] Found active session, joining:', sessionId);
+          const session = activeSessions.get(sessionId);
+          await client.query('COMMIT');
+          
+          return res.json({
+            session: {
+              ...session,
+              current_price: currentBtcPrice,
+            },
+            joined: true,
+          });
+        }
+      }
+      
+      // No active session found in memory - cleanup stale sessions
+      for (const row of existingSessions.rows) {
+        await client.query(
+          `UPDATE game_sessions SET completed = TRUE WHERE id = $1`,
+          [row.id]
+        );
+        console.log('[CANDLE START] Cleaned up stale session:', row.id);
+      }
+    }
 
     // Check user has enough balance
     const balanceResult = await client.query(
@@ -132,6 +175,8 @@ async function startSession(req, res, next) {
     );
 
     const sessionId = sessionResult.rows[0].id;
+
+    console.log('[CANDLE START] Created new session:', sessionId);
 
     // Create in-memory session
     const session = createSession(sessionId, {

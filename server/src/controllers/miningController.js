@@ -53,16 +53,18 @@ async function startSession(req, res, next) {
     const userId = req.user.id;
     const { relationship_id } = req.body;
 
+    console.log('[MINING START] Request:', { userId, relationship_id });
+
     if (!relationship_id) {
       throw new ApiError(400, 'Relationship ID required');
     }
 
     await client.query('BEGIN');
 
-    // Verify relationship
+    // Verify relationship - allow both MATCHED and MINTED_CONTRACT
     const relResult = await client.query(
       `SELECT * FROM relationships 
-       WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status = 'MATCHED'`,
+       WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status IN ('MATCHED', 'MINTED_CONTRACT')`,
       [relationship_id, userId]
     );
 
@@ -73,32 +75,51 @@ async function startSession(req, res, next) {
     const relationship = relResult.rows[0];
     const partnerId = relationship.user_a === userId ? relationship.user_b : relationship.user_a;
 
-    // Check for existing active session
+    // Check for existing active session between these two users
     const existingSession = await client.query(
       `SELECT id FROM game_sessions 
-       WHERE (user_id = $1 OR partner_id = $1) 
+       WHERE ((user_id = $1 AND partner_id = $2) OR (user_id = $2 AND partner_id = $1))
        AND game_type = 'MINING' 
        AND completed = FALSE 
        AND created_at > NOW() - INTERVAL '1 hour'`,
-      [userId]
+      [userId, partnerId]
     );
 
+    console.log('[MINING START] Found existing sessions:', existingSession.rows.length);
+
     if (existingSession.rows.length > 0) {
-      // Return existing session
-      const sessionId = existingSession.rows[0].id;
-      const stamina = await getUserStamina(client, userId);
+      // Check if any session is in memory (active)
+      for (const row of existingSession.rows) {
+        const sessionId = row.id;
+        if (activeSessions.has(sessionId)) {
+          console.log('[MINING START] Found active session, joining:', sessionId);
+          const stamina = await getUserStamina(client, userId);
+          await client.query('COMMIT');
+          
+          const memSession = activeSessions.get(sessionId);
+          return res.json({
+            session: {
+              id: sessionId,
+              relationship_id,
+              player_a_id: userId,
+              player_b_id: partnerId,
+              total_love_mined: memSession?.total_love || 0,
+              sync_combos: memSession?.sync_combos || 0,
+            },
+            stamina,
+            joined: true,
+          });
+        }
+      }
       
-      await client.query('COMMIT');
-      
-      return res.json({
-        session: {
-          id: sessionId,
-          relationship_id,
-          player_a_id: userId,
-          player_b_id: partnerId,
-        },
-        stamina,
-      });
+      // No active session found in memory - cleanup stale sessions
+      for (const row of existingSession.rows) {
+        await client.query(
+          `UPDATE game_sessions SET completed = TRUE WHERE id = $1`,
+          [row.id]
+        );
+        console.log('[MINING START] Cleaned up stale session:', row.id);
+      }
     }
 
     // Create new session

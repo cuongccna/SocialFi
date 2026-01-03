@@ -416,19 +416,26 @@ export default function MiningGamePage() {
       setIsLoading(true);
       setError(null);
 
-      if (sessionId) {
-        // Join existing session
-        const state = await getMiningState(sessionId);
-        setSession(state.session);
-        setStamina(state.my_stamina);
-        setPartnerStamina(state.partner_stamina);
-        setTotalLove(state.total_love);
-        setRockSize(state.rock_size);
-      } else if (relationshipId) {
-        // Start new session
+      // Always prioritize starting with relationshipId (like KYP game)
+      if (relationshipId) {
+        // Start/join session
         const result = await startMiningSession(relationshipId);
         setSession(result.session);
         setStamina(result.stamina);
+        console.log('Mining session started/joined:', result.session, 'joined:', result.joined);
+      } else if (sessionId) {
+        // Only use sessionId if no relationshipId (for rejoining)
+        try {
+          const state = await getMiningState(sessionId);
+          setSession(state.session);
+          setStamina(state.my_stamina);
+          setPartnerStamina(state.partner_stamina);
+          setTotalLove(state.total_love);
+          setRockSize(state.rock_size);
+        } catch (stateErr) {
+          console.error('Mining session not found, expired:', stateErr);
+          setError('Session expired. Please start a new game.');
+        }
       } else {
         throw new Error('No relationship or session ID provided');
       }

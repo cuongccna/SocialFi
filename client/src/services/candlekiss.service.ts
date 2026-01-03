@@ -99,11 +99,12 @@ export const CANDLE_CONFIG = {
 
 /**
  * Start a new Candle Kiss session
+ * If a session already exists with this partner, it will join that session instead
  */
 export async function startCandleKissSession(
   relationshipId: string,
   stakeAmount: number
-): Promise<{ session: CandleKissSession }> {
+): Promise<{ session: CandleKissSession; joined?: boolean }> {
   return api.post('/games/candle/start', {
     relationship_id: relationshipId,
     stake_amount: stakeAmount,
