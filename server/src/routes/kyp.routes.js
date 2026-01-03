@@ -5,10 +5,10 @@
 const express = require('express');
 const router = express.Router();
 const kypController = require('../controllers/kypController');
-const { authenticate } = require('../middlewares');
+const { authMiddleware } = require('../middlewares');
 
 // All KYP routes require authentication
-router.use(authenticate);
+router.use(authMiddleware);
 
 // Start a new KYP game
 router.post('/start', kypController.startGame);

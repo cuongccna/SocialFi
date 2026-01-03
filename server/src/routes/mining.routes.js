@@ -6,10 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const miningController = require('../controllers/miningController');
-const { authenticate } = require('../middlewares');
+const { authMiddleware } = require('../middlewares');
 
 // All routes require authentication
-router.use(authenticate);
+router.use(authMiddleware);
 
 // Start a new mining session
 router.post('/start', miningController.startSession);

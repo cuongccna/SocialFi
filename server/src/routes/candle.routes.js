@@ -6,10 +6,10 @@
 const express = require('express');
 const router = express.Router();
 const candleKissController = require('../controllers/candleKissController');
-const { authenticate } = require('../middlewares');
+const { authMiddleware } = require('../middlewares');
 
 // All routes require authentication
-router.use(authenticate);
+router.use(authMiddleware);
 
 // Start a new session
 router.post('/start', candleKissController.startSession);
