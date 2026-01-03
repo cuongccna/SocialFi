@@ -5,6 +5,7 @@
 
 const { query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
+const { sendGameInvite } = require('../services/telegramBot');
 
 // ============================================
 // Configuration
@@ -137,6 +138,56 @@ async function startSession(req, res, next) {
 
     await client.query('COMMIT');
 
+    // ============================================
+    // Send notification to partner
+    // ============================================
+    const partnerResult = await query(
+      `SELECT display_name, avatar_url, telegram_id FROM users WHERE id = $1`,
+      [partnerId]
+    );
+    const inviterResult = await query(
+      `SELECT display_name FROM users WHERE id = $1`,
+      [userId]
+    );
+    const inviterName = inviterResult.rows[0]?.display_name || 'Your match';
+    const partner = partnerResult.rows[0];
+
+    const io = req.app.get('io');
+    let inviteSent = false;
+
+    // Send via Socket.io
+    if (io) {
+      const partnerRoom = `user:${partnerId}`;
+      io.to(partnerRoom).emit('game_invite', {
+        gameId: sessionId,
+        inviterName: inviterName,
+        inviterId: userId,
+        gameType: 'MINING',
+        relationshipId: relationship_id,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[MINING] 🎮 Socket invite sent to partner room: ${partnerRoom}`);
+      inviteSent = true;
+    }
+
+    // Also send via Telegram
+    if (partner?.telegram_id) {
+      try {
+        const telegramResult = await sendGameInvite(
+          partner.telegram_id,
+          inviterName,
+          'MINING',
+          sessionId
+        );
+        if (telegramResult?.success) {
+          console.log(`[MINING] 📱 Telegram invite sent to ${partner.display_name}`);
+          inviteSent = true;
+        }
+      } catch (err) {
+        console.warn('[MINING] Failed to send Telegram invite:', err.message);
+      }
+    }
+
     res.json({
       session: {
         id: sessionId,
@@ -148,6 +199,7 @@ async function startSession(req, res, next) {
         created_at: sessionResult.rows[0].created_at,
       },
       stamina,
+      invite_sent: inviteSent,
     });
   } catch (error) {
     await client.query('ROLLBACK');

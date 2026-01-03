@@ -6,6 +6,7 @@
 const { query, getClient } = require('../config/db');
 const { ApiError } = require('../middlewares');
 const https = require('https');
+const { sendGameInvite } = require('../services/telegramBot');
 
 // ============================================
 // Configuration
@@ -189,11 +190,62 @@ async function startSession(req, res, next) {
 
     await client.query('COMMIT');
 
+    // ============================================
+    // Send notification to partner
+    // ============================================
+    const partnerResult = await query(
+      `SELECT display_name, avatar_url, telegram_id FROM users WHERE id = $1`,
+      [partnerId]
+    );
+    const inviterResult = await query(
+      `SELECT display_name FROM users WHERE id = $1`,
+      [userId]
+    );
+    const inviterName = inviterResult.rows[0]?.display_name || 'Your match';
+    const partner = partnerResult.rows[0];
+
+    const io = req.app.get('io');
+    let inviteSent = false;
+
+    // Send via Socket.io
+    if (io) {
+      const partnerRoom = `user:${partnerId}`;
+      io.to(partnerRoom).emit('game_invite', {
+        gameId: sessionId,
+        inviterName: inviterName,
+        inviterId: userId,
+        gameType: 'CANDLE_KISS',
+        relationshipId: relationship_id,
+        timestamp: new Date().toISOString(),
+      });
+      console.log(`[CANDLE] 🎮 Socket invite sent to partner room: ${partnerRoom}`);
+      inviteSent = true;
+    }
+
+    // Also send via Telegram
+    if (partner?.telegram_id) {
+      try {
+        const telegramResult = await sendGameInvite(
+          partner.telegram_id,
+          inviterName,
+          'CANDLE_KISS',
+          sessionId
+        );
+        if (telegramResult?.success) {
+          console.log(`[CANDLE] 📱 Telegram invite sent to ${partner.display_name}`);
+          inviteSent = true;
+        }
+      } catch (err) {
+        console.warn('[CANDLE] Failed to send Telegram invite:', err.message);
+      }
+    }
+
     res.json({
       session: {
         ...session,
         current_price: currentBtcPrice,
       },
+      invite_sent: inviteSent,
     });
   } catch (error) {
     await client.query('ROLLBACK');

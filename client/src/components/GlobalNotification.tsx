@@ -115,14 +115,25 @@ export default function GlobalNotification() {
       // Navigate to game with session ID
       const params = new URLSearchParams();
       
-      // For KYP game, use 'session' parameter (the gameId is actually the session_id)
-      if (notification.data.gameId && !notification.data.gameId.startsWith('pending_')) {
-        params.set('session', notification.data.gameId);
-      }
+      // Different games use different param names
+      const gameType = notification.data.gameType;
       
-      // Also include relationship ID if available
-      if (notification.data.relationshipId) {
-        params.set('relationship', notification.data.relationshipId);
+      if (gameType === 'KYP') {
+        // KYP uses 'session' and 'relationship'
+        if (notification.data.gameId && !notification.data.gameId.startsWith('pending_')) {
+          params.set('session', notification.data.gameId);
+        }
+        if (notification.data.relationshipId) {
+          params.set('relationship', notification.data.relationshipId);
+        }
+      } else {
+        // Mining and CandleKiss use 'session_id' and 'relationship_id'
+        if (notification.data.gameId && !notification.data.gameId.startsWith('pending_')) {
+          params.set('session_id', notification.data.gameId);
+        }
+        if (notification.data.relationshipId) {
+          params.set('relationship_id', notification.data.relationshipId);
+        }
       }
       
       const queryString = params.toString();

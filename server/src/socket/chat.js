@@ -137,7 +137,7 @@ function initChatSocket(io) {
 
         // Verify sender is part of relationship
         const relCheck = await pool.query(`
-          SELECT id, joint_balance FROM relationships 
+          SELECT id, joint_balance, user_a, user_b FROM relationships 
           WHERE id = $1 
             AND (user_a = $2 OR user_b = $2)
             AND status != 'BURNED_CONTRACT'
@@ -147,6 +147,9 @@ function initChatSocket(io) {
           socket.emit('error', { message: 'Not authorized to send message' });
           return;
         }
+
+        const relationship = relCheck.rows[0];
+        const partnerId = relationship.user_a === sender_id ? relationship.user_b : relationship.user_a;
 
         // Save message to DB
         const msgResult = await pool.query(`
@@ -192,7 +195,22 @@ function initChatSocket(io) {
           increment: rewardAmount,
         });
 
-        console.log(`💬 Message sent in ${roomName}: ${content.substring(0, 30)}...`);
+        // ==========================================
+        // Send notification to partner's personal room
+        // (for badge updates when not in chat)
+        // ==========================================
+        const partnerRoom = `user:${partnerId}`;
+        io.to(partnerRoom).emit('new_message_notification', {
+          relationship_id,
+          sender_id,
+          sender_name: message.sender_name,
+          sender_avatar: message.sender_avatar,
+          content: content.substring(0, 50),
+          type,
+          timestamp: new Date().toISOString(),
+        });
+
+        console.log(`💬 Message sent in ${roomName}: ${content.substring(0, 30)}... (notified ${partnerRoom})`);
 
       } catch (err) {
         console.error('Error sending message:', err);
