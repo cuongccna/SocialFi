@@ -314,7 +314,7 @@ export default function ChatPage() {
           <button
             onClick={() => {
               haptic.impact('light');
-              navigate(-1);
+              navigate('/matches');
             }}
             className="p-2 -ml-2 rounded-full hover:bg-white/10 transition-colors"
           >

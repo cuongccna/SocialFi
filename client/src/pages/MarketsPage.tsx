@@ -282,12 +282,11 @@ export default function MarketsPage() {
             <div className="grid grid-cols-2 gap-3 mb-6">
               <button
                 onClick={() => setBetPosition('LONG')}
-                disabled={selectedMarket.user_bet_position === 'SHORT'}
                 className={`p-4 rounded-xl border-2 transition-all ${
                   betPosition === 'LONG'
                     ? 'border-neon-green bg-neon-green/20'
                     : 'border-white/20 bg-white/5'
-                } ${selectedMarket.user_bet_position === 'SHORT' ? 'opacity-40 cursor-not-allowed' : ''}`}
+                }`}
               >
                 <TrendingUp className={`w-8 h-8 mx-auto mb-2 ${
                   betPosition === 'LONG' ? 'text-neon-green' : 'text-white/60'
@@ -296,19 +295,15 @@ export default function MarketsPage() {
                   LONG 📈
                 </p>
                 <p className="text-xs text-white/60 mt-1">They stay together</p>
-                {selectedMarket.user_bet_position === 'SHORT' && (
-                  <p className="text-xs text-neon-red mt-1">🚫 Locked</p>
-                )}
               </button>
 
               <button
                 onClick={() => setBetPosition('SHORT')}
-                disabled={selectedMarket.user_bet_position === 'LONG'}
                 className={`p-4 rounded-xl border-2 transition-all ${
                   betPosition === 'SHORT'
                     ? 'border-neon-red bg-neon-red/20'
                     : 'border-white/20 bg-white/5'
-                } ${selectedMarket.user_bet_position === 'LONG' ? 'opacity-40 cursor-not-allowed' : ''}`}
+                }`}
               >
                 <TrendingDown className={`w-8 h-8 mx-auto mb-2 ${
                   betPosition === 'SHORT' ? 'text-neon-red' : 'text-white/60'
@@ -317,9 +312,6 @@ export default function MarketsPage() {
                   SHORT 📉
                 </p>
                 <p className="text-xs text-white/60 mt-1">They break up</p>
-                {selectedMarket.user_bet_position === 'LONG' && (
-                  <p className="text-xs text-neon-red mt-1">🚫 Locked</p>
-                )}
               </button>
             </div>
 
