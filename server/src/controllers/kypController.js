@@ -131,6 +131,22 @@ async function startGame(req, res, next) {
             game.phase = 'BETTING';
             game.current_round = 1;
             console.log('[KYP START] Game phase changed to BETTING');
+            
+            // Emit socket event to notify all players in the room
+            const io = module.exports.io;
+            if (io) {
+              const currentRound = {
+                round_number: game.current_round,
+                question: game.questions[game.current_round - 1],
+                phase: game.phase,
+                time_remaining: CONFIG.TIME_TO_BET,
+              };
+              io.to(`kyp:${existingSessionId}`).emit('kyp:phase', {
+                phase: game.phase,
+                round: currentRound,
+              });
+              console.log('[KYP START] Emitted kyp:phase to room:', `kyp:${existingSessionId}`);
+            }
           }
 
           await client.query('COMMIT');
