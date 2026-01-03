@@ -18,7 +18,7 @@ if (!telegramInitialized) {
 
 // TonConnect manifest URL - use relative path for development
 const manifestUrl = import.meta.env.PROD 
-  ? 'https://cryptocrush.app/tonconnect-manifest.json'
+  ? 'https://magiamhot.io.vn/tonconnect-manifest.json'
   : `${window.location.origin}/tonconnect-manifest.json`;
 
 createRoot(document.getElementById('root')!).render(

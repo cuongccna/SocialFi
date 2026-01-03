@@ -686,7 +686,7 @@ async function generateShareImage(req, res, next) {
 
     res.json({
       success: true,
-      image_url: `https://cryptocrush.app/share/kyp/${session_id}.png`,
+      image_url: `https://magiamhot.io.vn/share/kyp/${session_id}.png`,
       share_text: `💕 We matched ${matchPercentage}% on CryptoCrush KYP Challenge! Think you can beat us? #CryptoCrush #KYPChallenge`,
     });
   } catch (error) {
