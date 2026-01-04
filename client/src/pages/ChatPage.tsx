@@ -460,7 +460,10 @@ export default function ChatPage() {
 
   // Chat View
   return (
-    <div className="h-full flex flex-col">
+    <div 
+      className="h-full flex flex-col"
+      style={{ paddingTop: 'var(--tg-content-safe-area-inset-top, 0px)' }}
+    >
       {/* Chat Header */}
       <div className="p-4 bg-dark-100/50 backdrop-blur-sm border-b border-white/10">
         <div className="flex items-center gap-4">
@@ -643,8 +646,8 @@ export default function ChatPage() {
 
       {/* Message Input */}
       <div 
-        className="p-4 bg-dark-100/50 backdrop-blur-sm border-t border-white/10"
-        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+        className="px-3 py-2 bg-dark-100/50 backdrop-blur-sm border-t border-white/10"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))' }}
       >
         {/* Connection status indicator */}
         {!isConnected && (
@@ -654,7 +657,7 @@ export default function ChatPage() {
         )}
         
         <div className="flex items-center gap-2">
-          {/* Sticker Button */}
+          {/* Sticker Button - compact */}
           <button
             ref={stickerButtonRef}
             onClick={() => {
@@ -662,45 +665,48 @@ export default function ChatPage() {
               setShowStickerPicker(true);
             }}
             disabled={isSending}
-            className="p-3 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-all active:scale-95"
+            className="flex-shrink-0 p-2 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-50 transition-all active:scale-95"
             title="Send Sticker (+0.5 $LOVE)"
           >
             <Smile className="w-5 h-5 text-yellow-400" />
           </button>
           
-          {/* AI Rizz Me Button */}
+          {/* AI Rizz Me Button - compact */}
           <button
             onClick={handleRizzMe}
             disabled={isSending || isLoadingRizz}
-            className="p-3 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-purple-500/30"
+            className="flex-shrink-0 p-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-purple-500/30"
             title={`✨ Rizz Me (${AI_RIZZ_COST} $LOVE)`}
           >
             <Sparkles className="w-5 h-5 text-white" />
           </button>
           
-          <input
-            ref={inputRef}
-            type="text"
-            value={newMessage}
-            onChange={handleInputChange}
-            onKeyPress={handleKeyPress}
-            placeholder="Type a message..."
-            className="flex-1 bg-dark-200 border border-white/20 rounded-full px-4 py-3 focus:border-primary outline-none"
-            maxLength={1000}
-          />
-          
-          <button
-            ref={sendButtonRef}
-            onClick={handleSend}
-            disabled={!newMessage.trim() || isSending}
-            className="relative p-3 rounded-full bg-primary text-dark disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-primary/90 active:scale-95 shadow-lg shadow-primary/30"
-          >
-            {isSending ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
-          </button>
+          {/* Input with Send button inside */}
+          <div className="flex-1 flex items-center bg-dark-200 border border-white/20 rounded-full focus-within:border-primary overflow-hidden min-w-0">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newMessage}
+              onChange={handleInputChange}
+              onKeyPress={handleKeyPress}
+              placeholder="Type a message..."
+              className="flex-1 bg-transparent px-4 py-2.5 outline-none min-w-0"
+              maxLength={1000}
+            />
+            
+            <button
+              ref={sendButtonRef}
+              onClick={handleSend}
+              disabled={!newMessage.trim() || isSending}
+              className="flex-shrink-0 m-1 p-2 rounded-full bg-primary text-dark disabled:opacity-30 disabled:bg-white/10 disabled:text-white/50 transition-all hover:bg-primary/90 active:scale-95"
+            >
+              {isSending ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
