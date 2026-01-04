@@ -88,12 +88,13 @@ export default function BottomNav() {
     clearGameInvites,
   } = useNotifications();
 
-  // Hide BottomNav when in chat conversation (has match param)
-  // This prevents the nav from covering the message input on mobile
+  // Hide BottomNav when in chat conversation (has match param) or in shop
+  // This prevents the nav from covering the message input/content on mobile
   const searchParams = new URLSearchParams(location.search);
   const isInChatConversation = location.pathname === '/chat' && searchParams.has('match');
+  const isInShop = location.pathname === '/shop';
   
-  if (isInChatConversation) {
+  if (isInChatConversation || isInShop) {
     return null;
   }
 

@@ -152,10 +152,12 @@ export default function DecorShopPage() {
   return (
     <div 
       className="h-full flex flex-col bg-dark"
-      style={{ paddingTop: 'var(--tg-content-safe-area-inset-top, 0px)' }}
+      style={{ 
+        paddingTop: 'max(env(safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px))',
+      }}
     >
       {/* Header */}
-      <div className="flex-shrink-0 p-4 border-b border-white/10 bg-dark-100/50 backdrop-blur-sm">
+      <div className="flex-shrink-0 p-4 pt-2 border-b border-white/10 bg-dark-100/50 backdrop-blur-sm">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button

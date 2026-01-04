@@ -4,7 +4,6 @@
  */
 
 import { api } from '../api/axiosClient';
-import { type AxiosResponse } from 'axios';
 
 // ============================================
 // Types
@@ -74,58 +73,60 @@ export interface EquipItemResponse {
 // API Functions
 // ============================================
 
+// Note: api.get/post already unwraps res.data, so response IS the data
+
 /**
  * Get all shop items grouped by category
  */
 export async function getShopItems(): Promise<GroupedShopItems> {
-  const response: AxiosResponse<{ success: boolean; items: GroupedShopItems }> = await api.get('/shop/items');
-  return response.data.items;
+  const response = await api.get<{ success: boolean; items: GroupedShopItems }>('/shop/items');
+  return response.items;
 }
 
 /**
  * Get user's inventory (owned items)
  */
 export async function getUserInventory(): Promise<GroupedShopItems> {
-  const response: AxiosResponse<{ success: boolean; inventory: GroupedShopItems }> = await api.get('/shop/inventory');
-  return response.data.inventory;
+  const response = await api.get<{ success: boolean; inventory: GroupedShopItems }>('/shop/inventory');
+  return response.inventory;
 }
 
 /**
  * Purchase an item from the shop
  */
 export async function buyItem(itemId: string): Promise<BuyItemResponse> {
-  const response: AxiosResponse<BuyItemResponse> = await api.post('/shop/buy', { item_id: itemId });
-  return response.data;
+  const response = await api.post<BuyItemResponse>('/shop/buy', { item_id: itemId });
+  return response;
 }
 
 /**
  * Equip an item to a relationship's chat
  */
 export async function equipItem(itemId: string, relationshipId: string): Promise<EquipItemResponse> {
-  const response: AxiosResponse<EquipItemResponse> = await api.post('/shop/equip', { 
+  const response = await api.post<EquipItemResponse>('/shop/equip', { 
     item_id: itemId, 
     relationship_id: relationshipId 
   });
-  return response.data;
+  return response;
 }
 
 /**
  * Unequip an item from a relationship's chat
  */
 export async function unequipItem(category: ItemCategory, relationshipId: string): Promise<{ success: boolean; message: string }> {
-  const response: AxiosResponse<{ success: boolean; message: string }> = await api.post('/shop/unequip', { 
+  const response = await api.post<{ success: boolean; message: string }>('/shop/unequip', { 
     category, 
     relationship_id: relationshipId 
   });
-  return response.data;
+  return response;
 }
 
 /**
  * Get active decorations for a relationship
  */
 export async function getRelationshipDecor(relationshipId: string): Promise<RelationshipDecor> {
-  const response: AxiosResponse<{ success: boolean; decor: RelationshipDecor }> = await api.get(`/shop/decor/${relationshipId}`);
-  return response.data.decor;
+  const response = await api.get<{ success: boolean; decor: RelationshipDecor }>(`/shop/decor/${relationshipId}`);
+  return response.decor;
 }
 
 // ============================================

@@ -14,30 +14,7 @@ async function getShopItems(req, res, next) {
   try {
     const userId = req.user.id;
 
-    // Get all active shop items
-    const itemsResult = await pool.query(`
-      SELECT 
-        si.id,
-        si.name,
-        si.description,
-        si.category,
-        si.price,
-        si.is_premium,
-        si.asset_url,
-        si.thumbnail_url,
-        si.z_index,
-        si.position_hint,
-        si.is_animated,
-        EXISTS(
-          SELECT 1 FROM user_inventory ui 
-          WHERE ui.user_id = $1 AND ui.item_id = si.id
-        ) as is_owned
-      FROM shop_items si
-      WHERE si.is_active = TRUE
-      ORDER BY si.category, si.price ASC
-    `, [userId]);
-
-    // Group items by category
+    // Default empty structure
     const groupedItems = {
       WALLPAPER: [],
       PET: [],
@@ -45,20 +22,54 @@ async function getShopItems(req, res, next) {
       EFFECT: [],
     };
 
-    itemsResult.rows.forEach(item => {
-      if (groupedItems[item.category]) {
-        groupedItems[item.category].push({
-          ...item,
-          price: parseInt(item.price),
-        });
-      }
-    });
+    try {
+      // Get all active shop items
+      const itemsResult = await pool.query(`
+        SELECT 
+          si.id,
+          si.name,
+          si.description,
+          si.category,
+          si.price,
+          si.is_premium,
+          si.asset_url,
+          si.thumbnail_url,
+          si.z_index,
+          si.position_hint,
+          si.is_animated,
+          EXISTS(
+            SELECT 1 FROM user_inventory ui 
+            WHERE ui.user_id = $1 AND ui.item_id = si.id
+          ) as is_owned
+        FROM shop_items si
+        WHERE si.is_active = TRUE
+        ORDER BY si.category, si.price ASC
+      `, [userId]);
 
-    res.json({
-      success: true,
-      items: groupedItems,
-      totalCount: itemsResult.rows.length,
-    });
+      itemsResult.rows.forEach(item => {
+        if (groupedItems[item.category]) {
+          groupedItems[item.category].push({
+            ...item,
+            price: parseInt(item.price),
+          });
+        }
+      });
+
+      res.json({
+        success: true,
+        items: groupedItems,
+        totalCount: itemsResult.rows.length,
+      });
+    } catch (dbErr) {
+      // If table doesn't exist yet, return empty shop
+      console.log('⚠️ Shop tables not ready:', dbErr.message);
+      res.json({
+        success: true,
+        items: groupedItems,
+        totalCount: 0,
+        warning: 'Shop system initializing...',
+      });
+    }
 
   } catch (err) {
     next(err);
