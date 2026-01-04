@@ -10,7 +10,7 @@ const { Bot, InlineKeyboard } = require('grammy');
 let bot = null;
 
 // Config
-const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/GigEcoBot/GigEconomy';
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://t.me/CryptoCrushSocialFiBot/CryptoCrush';
 const COMMUNITY_URL = process.env.COMMUNITY_URL || 'https://t.me/CryptoCrushCommunity';
 const WELCOME_IMAGE = process.env.WELCOME_IMAGE || 'https://i.imgur.com/5CmQjNr.gif'; // Placeholder animation
 
@@ -113,7 +113,7 @@ async function initBot(token) {
   // ============================================
   bot.command('ref', async (ctx) => {
     const userId = ctx.from?.id;
-    const referralLink = `https://t.me/GigEcoBot/GigEconomy?startapp=ref_${userId}`;
+    const referralLink = `https://t.me/CryptoCrushSocialFiBot/CryptoCrush?startapp=ref_${userId}`;
 
     const keyboard = new InlineKeyboard()
       .url('📤 Share Link', `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('🔥 Join CryptoCrush - Swipe to Earn $LOVE! 💚')}`)
@@ -243,7 +243,7 @@ async function sendAnonymousMessage(senderTelegramId, recipientTelegramId, sende
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [[
-          { text: '💬 Reply in App', url: `https://t.me/GigEcoBot/GigEconomy?startapp=chat_${matchId}` }
+          { text: '💬 Reply in App', url: `https://t.me/CryptoCrushSocialFiBot/CryptoCrush?startapp=chat_${matchId}` }
         ]]
       }
     });
@@ -356,7 +356,7 @@ async function sendGameInvite(recipientTelegramId, inviterName, gameType, roomId
   const gameName = gameNames[gameType] || gameType;
 
   // Use fixed Mini App URL instead of dynamic bot username
-  const deepLink = `https://t.me/GigEcoBot/GigEconomy?startapp=game_${roomId}`;
+  const deepLink = `https://t.me/CryptoCrushSocialFiBot/CryptoCrush?startapp=game_${roomId}`;
 
   const message = 
     `🎮 <b>GAME CHALLENGE!</b> 🎮\n\n` +

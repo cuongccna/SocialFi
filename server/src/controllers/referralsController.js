@@ -66,7 +66,7 @@ async function getReferralInfo(req, res, next) {
     `, [userId]);
 
     // Generate invite link - use Mini App deep link format
-    const inviteLink = `https://t.me/GigEcoBot/GigEconomy?startapp=ref_${referralCode}`;
+    const inviteLink = `https://t.me/CryptoCrushSocialFiBot/CryptoCrush?startapp=ref_${referralCode}`;
 
     res.json({
       success: true,
