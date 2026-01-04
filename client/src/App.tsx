@@ -1,5 +1,8 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth, AuthLoadingScreen, AuthErrorScreen } from './context/AuthContext';
+import { parseDeepLink } from './utils/telegram';
+import { api } from './api/axiosClient';
 
 // Pages
 import FeedPage from './pages/FeedPage';
@@ -30,6 +33,36 @@ import GlobalNotification from './components/GlobalNotification';
 
 function App() {
   const { isLoading, isAuthenticated, error } = useAuth();
+  const navigate = useNavigate();
+
+  // Handle Telegram deep links (startapp parameter)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    const deepLink = parseDeepLink();
+    if (!deepLink) return;
+    
+    console.log('📱 Deep link detected:', deepLink);
+    
+    switch (deepLink.action) {
+      case 'ref':
+        // Referral link - apply referral code via API
+        api.post('/referrals/apply', { referral_code: deepLink.value })
+          .then(() => console.log('✅ Referral code applied:', deepLink.value))
+          .catch((err) => console.log('📎 Referral code not applied:', err.message));
+        break;
+      case 'game':
+        // Game invite - navigate to the appropriate game
+        navigate(`/games/kyp?session=${deepLink.value}`);
+        break;
+      case 'chat':
+        // Chat deep link - navigate to chat
+        navigate(`/chat?relationship_id=${deepLink.value}`);
+        break;
+      default:
+        console.log('Unknown deep link action:', deepLink.action);
+    }
+  }, [isAuthenticated, navigate]);
 
   // Note: Telegram WebApp viewport setup is handled in main.tsx via initTelegramWebApp()
   // This includes: disableVerticalSwipes, viewport height CSS vars, and viewportChanged listener

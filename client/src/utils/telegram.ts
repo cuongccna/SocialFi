@@ -139,6 +139,32 @@ export function isInTelegram(): boolean {
 }
 
 /**
+ * Get start_param from Telegram deep link (startapp parameter)
+ * @returns The start parameter value or null if not present
+ */
+export function getStartParam(): string | null {
+  return WebApp.initDataUnsafe?.start_param || null;
+}
+
+/**
+ * Parse deep link start_param to get action and value
+ * Format: action_value (e.g., ref_abc123, game_uuid, chat_uuid)
+ * @returns Parsed deep link object or null
+ */
+export function parseDeepLink(): { action: string; value: string } | null {
+  const startParam = getStartParam();
+  if (!startParam) return null;
+  
+  const underscoreIndex = startParam.indexOf('_');
+  if (underscoreIndex === -1) return null;
+  
+  return {
+    action: startParam.substring(0, underscoreIndex),
+    value: startParam.substring(underscoreIndex + 1),
+  };
+}
+
+/**
  * Get Telegram WebApp instance for advanced usage
  */
 export { WebApp };

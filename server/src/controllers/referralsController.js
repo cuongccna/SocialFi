@@ -65,9 +65,8 @@ async function getReferralInfo(req, res, next) {
       LIMIT 10
     `, [userId]);
 
-    // Generate invite link
-    const botUsername = process.env.BOT_USERNAME || 'CryptoCrushBot';
-    const inviteLink = `https://t.me/${botUsername}?start=ref_${referralCode}`;
+    // Generate invite link - use Mini App deep link format
+    const inviteLink = `https://t.me/GigEcoBot/GigEconomy?startapp=ref_${referralCode}`;
 
     res.json({
       success: true,
