@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Send, Loader2, MessageCircle, Heart, Coins, Smile, Sparkles
+  ArrowLeft, Send, Loader2, MessageCircle, Heart, Coins, Smile, Sparkles, ShoppingBag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -17,6 +17,11 @@ import {
   isInsufficientBalanceError, 
   AI_RIZZ_COST 
 } from '../services/ai.service';
+import {
+  getRelationshipDecor,
+  getPositionClasses,
+  type RelationshipDecor,
+} from '../services/shop.service';
 import { useAuth } from '../context/AuthContext';
 import { haptic } from '../utils/telegram';
 import { useSocket } from '../hooks/useSocket';
@@ -49,6 +54,10 @@ export default function ChatPage() {
   const [isLoadingRizz, setIsLoadingRizz] = useState(false);
   const [rizzSuggestions, setRizzSuggestions] = useState<string[]>([]);
   const [showLowBalanceAlert, setShowLowBalanceAlert] = useState(false);
+  
+  // Penthouse Decoration state
+  const [decor, setDecor] = useState<RelationshipDecor | null>(null);
+  const [petBubble, setPetBubble] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -129,10 +138,19 @@ export default function ChatPage() {
     setJointBalance(Number(conversation.joint_balance) || 0);
     setMessages([]);
     setIsPartnerTyping(false);
+    setDecor(null); // Reset decor
     
     try {
       const { messages: msgs } = await getMessages(conversation.relationship_id);
       setMessages(msgs);
+      
+      // Load room decorations
+      try {
+        const decorData = await getRelationshipDecor(conversation.relationship_id);
+        setDecor(decorData);
+      } catch (decorErr) {
+        console.log('No decorations set for this chat');
+      }
       
       // Mark messages as read via socket
       setTimeout(() => {
@@ -461,11 +479,88 @@ export default function ChatPage() {
   // Chat View
   return (
     <div 
-      className="h-full flex flex-col"
+      className="h-full flex flex-col relative"
       style={{ paddingTop: 'var(--tg-content-safe-area-inset-top, 0px)' }}
     >
+      {/* ========== PENTHOUSE DECORATION LAYERS ========== */}
+      
+      {/* Layer 0: Background Wallpaper */}
+      {decor?.wallpaper && (
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img
+            src={decor.wallpaper.url}
+            alt={decor.wallpaper.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+      
+      {/* Layer 1: Furniture (positioned based on position_hint) */}
+      {decor?.furniture && (
+        <div 
+          className={`z-10 pointer-events-none ${getPositionClasses(decor.furniture.position || 'bottom-center')}`}
+          style={{ width: '80px', height: '80px' }}
+        >
+          <img
+            src={decor.furniture.url}
+            alt={decor.furniture.name}
+            className="w-full h-full object-contain"
+          />
+        </div>
+      )}
+      
+      {/* Layer 1: Pet (interactive - clickable) */}
+      {decor?.pet && (
+        <motion.button
+          onClick={() => {
+            haptic.impact('light');
+            const bubbles = ['Meow! I love you! 💕', 'Woof! You\'re the best! 🐾', 'Purrrr~ 😻', '*happy noises* ✨', 'Love you both! 💖'];
+            setPetBubble(bubbles[Math.floor(Math.random() * bubbles.length)]);
+            setTimeout(() => setPetBubble(null), 2000);
+          }}
+          className={`z-10 ${getPositionClasses(decor.pet.position || 'bottom-left')}`}
+          style={{ width: '60px', height: '60px' }}
+          whileTap={{ scale: 1.2 }}
+          animate={{ y: [0, -5, 0] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+        >
+          <img
+            src={decor.pet.url}
+            alt={decor.pet.name}
+            className="w-full h-full object-contain drop-shadow-lg"
+          />
+          {/* Pet Speech Bubble */}
+          <AnimatePresence>
+            {petBubble && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.8 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.8 }}
+                className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap bg-white text-dark text-xs font-medium px-2 py-1 rounded-lg shadow-lg"
+              >
+                {petBubble}
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 bg-white rotate-45" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      )}
+      
+      {/* Layer 2: Effect Overlay */}
+      {decor?.effect && (
+        <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden">
+          <img
+            src={decor.effect.url}
+            alt={decor.effect.name}
+            className="w-full h-full object-cover opacity-60"
+          />
+        </div>
+      )}
+
+      {/* ========== CHAT CONTENT (with semi-transparent overlay) ========== */}
+      
       {/* Chat Header */}
-      <div className="p-4 bg-dark-100/50 backdrop-blur-sm border-b border-white/10">
+      <div className={`p-4 border-b border-white/10 z-30 ${decor?.wallpaper ? 'bg-dark-100/70 backdrop-blur-md' : 'bg-dark-100/50 backdrop-blur-sm'}`}>
         <div className="flex items-center gap-4">
           <button
             onClick={() => setSelectedConversation(null)}
@@ -487,6 +582,15 @@ export default function ChatPage() {
               Matched
             </p>
           </div>
+          
+          {/* Shop Button */}
+          <button
+            onClick={() => navigate(`/shop?relationship=${selectedConversation.relationship_id}`)}
+            className="p-2 rounded-full bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 transition-all"
+            title="Love Decor Shop"
+          >
+            <ShoppingBag className="w-5 h-5 text-pink-400" />
+          </button>
         </div>
         
         {/* Joint Venture Pool - THE TICKER */}
@@ -558,8 +662,8 @@ export default function ChatPage() {
         </motion.div>
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      {/* Messages Area - Layer 3 with semi-transparent background */}
+      <div className={`flex-1 overflow-y-auto p-4 space-y-3 z-30 ${decor?.wallpaper ? 'bg-black/40' : ''}`}>
         {messages.length === 0 && (
           <div className="text-center py-8">
             <div className="text-4xl mb-2">👋</div>
@@ -644,9 +748,9 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input */}
+      {/* Message Input - Layer 3 */}
       <div 
-        className="px-3 py-2 bg-dark-100/50 backdrop-blur-sm border-t border-white/10"
+        className={`px-3 py-2 border-t border-white/10 z-30 ${decor?.wallpaper ? 'bg-dark-100/80 backdrop-blur-md' : 'bg-dark-100/50 backdrop-blur-sm'}`}
         style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))' }}
       >
         {/* Connection status indicator */}

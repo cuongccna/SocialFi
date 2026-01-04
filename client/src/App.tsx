@@ -24,6 +24,7 @@ import MiningGamePage from './pages/MiningGamePage';
 import CandleKissPage from './pages/CandleKissPage';
 import EarnHub from './pages/EarnHub';
 import NotificationsPage from './pages/NotificationsPage';
+import DecorShopPage from './pages/DecorShopPage';
 
 // Layout
 import BottomNav from './components/layout/BottomNav';
@@ -109,6 +110,7 @@ function App() {
           <Route path="/games/candle" element={<CandleKissPage />} />
           <Route path="/earn" element={<EarnHub />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/shop" element={<DecorShopPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
         </Routes>

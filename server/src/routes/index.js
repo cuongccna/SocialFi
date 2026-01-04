@@ -34,5 +34,6 @@ router.use('/fud', require('./fud.routes'));
 router.use('/games', require('./games.routes'));
 router.use('/chat', require('./ai.routes'));
 router.use('/notifications', require('./notificationsRoutes'));
+router.use('/shop', require('./shop.routes'));
 
 module.exports = router;
