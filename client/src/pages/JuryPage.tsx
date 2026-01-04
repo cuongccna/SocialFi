@@ -256,7 +256,7 @@ export default function JuryPage() {
       </AnimatePresence>
       
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-dark-bg/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
+      <div className="sticky top-0 z-40 bg-dark-bg/95 backdrop-blur-sm border-b border-white/10 px-4 pt-3 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Gavel className="w-6 h-6 text-neon-green" />

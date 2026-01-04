@@ -616,6 +616,10 @@ export default function CandleKissPage() {
   const [showDisagreement, setShowDisagreement] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Disconnect state
+  const [partnerDisconnected, setPartnerDisconnected] = useState(false);
+  const [disconnectMessage, setDisconnectMessage] = useState<string>('');
 
   // Settlement result
   const [showResult, setShowResult] = useState(false);
@@ -706,13 +710,52 @@ export default function CandleKissPage() {
     socket.on(CANDLE_SOCKET_EVENTS.GAME_SETTLED, handleGameSettled);
 
     return () => {
-      socket.emit(CANDLE_SOCKET_EVENTS.LEAVE_ROOM, { session_id: session.id });
+      socket.emit(CANDLE_SOCKET_EVENTS.LEAVE_ROOM, { session_id: session.id, user_id: user?.id });
       socket.off(CANDLE_SOCKET_EVENTS.BET_PROPOSED);
       socket.off(CANDLE_SOCKET_EVENTS.BET_ACCEPTED);
       socket.off(CANDLE_SOCKET_EVENTS.BET_REJECTED);
       socket.off(CANDLE_SOCKET_EVENTS.GAME_SETTLED);
     };
   }, [socket, session?.id, user?.id]);
+
+  // Listen for partner disconnect/leave events
+  useEffect(() => {
+    if (!socket || !session?.id) return;
+
+    const handlePartnerDisconnected = (data: { session_id: string; message: string }) => {
+      if (data.session_id === session.id) {
+        notificationOccurred?.('error');
+        setDisconnectMessage(data.message || 'Your partner has disconnected.');
+        setPartnerDisconnected(true);
+        // Clear countdown timer
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+        setTimeout(() => navigate('/games'), 3000);
+      }
+    };
+
+    const handlePartnerLeft = (data: { session_id: string; message: string }) => {
+      if (data.session_id === session.id) {
+        notificationOccurred?.('error');
+        setDisconnectMessage(data.message || 'Your partner has left the game.');
+        setPartnerDisconnected(true);
+        // Clear countdown timer
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+        setTimeout(() => navigate('/games'), 3000);
+      }
+    };
+
+    socket.on('candle:partner_disconnected', handlePartnerDisconnected);
+    socket.on('candle:partner_left', handlePartnerLeft);
+
+    return () => {
+      socket.off('candle:partner_disconnected', handlePartnerDisconnected);
+      socket.off('candle:partner_left', handlePartnerLeft);
+    };
+  }, [socket, session?.id, navigate]);
 
   // Initialize game
   useEffect(() => {
@@ -908,6 +951,27 @@ export default function CandleKissPage() {
         >
           Back to Games
         </button>
+      </div>
+    );
+  }
+
+  // Partner disconnected/left state
+  if (partnerDisconnected) {
+    return (
+      <div className="min-h-screen bg-dark flex flex-col items-center justify-center p-6">
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="text-center bg-dark-card rounded-2xl p-8 border border-red-500/30"
+        >
+          <div className="text-5xl mb-4">🚫</div>
+          <h2 className="text-xl font-bold text-white mb-2">Game Ended</h2>
+          <p className="text-white/60 mb-4">{disconnectMessage}</p>
+          <p className="text-sm text-white/40 mb-6">Redirecting to Games Hub...</p>
+          <button onClick={handleExit} className="px-6 py-3 bg-purple-600 rounded-xl font-bold text-white">
+            Back to Games
+          </button>
+        </motion.div>
       </div>
     );
   }

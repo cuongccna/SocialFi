@@ -698,14 +698,20 @@ async function generateShareImage(req, res, next) {
 // Socket Event Handlers
 // ============================================
 
+// Track which socket is in which game room
+const socketToGameRoom = new Map(); // socket.id -> { session_id, user_id }
+
 function setupKYPSocketHandlers(io) {
   // Store io instance for use in controllers
   module.exports.io = io;
   
   io.on('connection', (socket) => {
     // Join KYP game room
-    socket.on('kyp:join', ({ session_id }) => {
+    socket.on('kyp:join', ({ session_id, user_id }) => {
       socket.join(`kyp:${session_id}`);
+      
+      // Track this socket's game room
+      socketToGameRoom.set(socket.id, { session_id, user_id });
       console.log(`User joined KYP room: ${session_id}`);
       
       const game = activeGames.get(session_id);
@@ -732,9 +738,63 @@ function setupKYPSocketHandlers(io) {
       }
     });
 
-    // Leave game
-    socket.on('kyp:leave', ({ session_id }) => {
+    // Leave game (explicit exit button)
+    socket.on('kyp:leave', async ({ session_id, user_id }) => {
       socket.leave(`kyp:${session_id}`);
+      socketToGameRoom.delete(socket.id);
+      
+      const game = activeGames.get(session_id);
+      if (game) {
+        // Notify partner that user left the game
+        socket.to(`kyp:${session_id}`).emit('kyp:partner_left', {
+          session_id,
+          leaver_id: user_id,
+          message: 'Your partner has left the game.',
+        });
+        
+        // Mark game as abandoned in DB
+        try {
+          await query(
+            `UPDATE game_sessions SET completed = TRUE, status = 'ABANDONED' WHERE id = $1`,
+            [session_id]
+          );
+          activeGames.delete(session_id);
+          console.log(`[KYP] Game ${session_id} abandoned - user left`);
+        } catch (err) {
+          console.error('[KYP] Error marking game as abandoned:', err);
+        }
+      }
+    });
+
+    // Handle socket disconnect
+    socket.on('disconnect', async () => {
+      const gameInfo = socketToGameRoom.get(socket.id);
+      if (!gameInfo) return;
+      
+      const { session_id, user_id } = gameInfo;
+      socketToGameRoom.delete(socket.id);
+      
+      const game = activeGames.get(session_id);
+      if (game) {
+        // Notify partner that user disconnected
+        socket.to(`kyp:${session_id}`).emit('kyp:partner_disconnected', {
+          session_id,
+          disconnected_id: user_id,
+          message: 'Your partner has disconnected.',
+        });
+        
+        // Mark game as abandoned in DB
+        try {
+          await query(
+            `UPDATE game_sessions SET completed = TRUE, status = 'ABANDONED' WHERE id = $1`,
+            [session_id]
+          );
+          activeGames.delete(session_id);
+          console.log(`[KYP] Game ${session_id} abandoned - socket disconnected`);
+        } catch (err) {
+          console.error('[KYP] Error marking game as abandoned:', err);
+        }
+      }
     });
 
     // Submit bet via socket

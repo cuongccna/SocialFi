@@ -169,7 +169,7 @@ export default function GameLeaderboardPage() {
   return (
     <div className="min-h-screen bg-dark flex flex-col">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-dark/90 backdrop-blur-lg border-b border-white/10">
+      <div className="sticky top-0 z-40 bg-dark/90 backdrop-blur-lg border-b border-white/10">
         <div className="flex items-center justify-between p-4">
           <button
             onClick={() => navigate('/games')}

@@ -42,13 +42,22 @@ export function initTelegramWebApp(): void {
       }
     }
 
-    // Set theme colors to match CryptoCrush dark theme (merge header)
+    // Set theme colors to match CryptoCrush dark theme (merge header with app)
     try {
-      WebApp.setHeaderColor('#000000');
-      WebApp.setBackgroundColor('#0a0a0f');
+      WebApp.setHeaderColor('#111111');
+      WebApp.setBackgroundColor('#111111');
     } catch (e) {
       console.warn('Theme colors not available:', e);
     }
+
+    // Set safe area CSS variables for notch/status bar handling
+    const setSafeAreaVars = () => {
+      const safeAreaTop = WebApp.safeAreaInset?.top || 0;
+      const contentSafeAreaTop = WebApp.contentSafeAreaInset?.top || 0;
+      document.documentElement.style.setProperty('--tg-safe-area-inset-top', `${safeAreaTop}px`);
+      document.documentElement.style.setProperty('--tg-content-safe-area-inset-top', `${contentSafeAreaTop}px`);
+    };
+    setSafeAreaVars();
 
     // Disable vertical swipes to prevent interference with in-app scrolling (v7.7+)
     if (WebApp.isVersionAtLeast?.('7.7') && typeof WebApp.disableVerticalSwipes === 'function') {

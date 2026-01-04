@@ -61,6 +61,8 @@ body {
   /* Allow internal scrolling within the app */
   display: flex;
   flex-direction: column;
+  /* Safe area padding for Telegram native header and device notches */
+  padding-top: var(--tg-content-safe-area-inset-top, 0px);
 }
 
 /* Custom scrollbar */
@@ -84,6 +86,12 @@ body {
 
 /* Utility classes */
 @layer components {
+  /* Sticky header for pages - accounts for safe area */
+  .sticky-header {
+    @apply sticky top-0 z-40 backdrop-blur-sm;
+    padding-top: 10px;
+  }
+
   .btn-primary {
     @apply bg-primary text-dark font-semibold py-3 px-6 rounded-xl 
            transition-all duration-200 active:scale-95

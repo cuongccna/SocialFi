@@ -110,7 +110,7 @@ export default function LeaderboardPage() {
   return (
     <div className="h-full overflow-y-auto pb-20">
       {/* Header */}
-      <div className="p-4 bg-dark-100/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="p-4 bg-dark-100/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold flex items-center gap-2">
             <Trophy className="w-6 h-6 text-neon-yellow" />

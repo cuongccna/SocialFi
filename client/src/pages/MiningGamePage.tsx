@@ -314,6 +314,10 @@ export default function MiningGamePage() {
   const [syncCombos, setSyncCombos] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Disconnect state
+  const [partnerDisconnected, setPartnerDisconnected] = useState(false);
+  const [disconnectMessage, setDisconnectMessage] = useState<string>('');
 
   // Tap batching state
   const pendingTaps = useRef(0);
@@ -382,7 +386,7 @@ export default function MiningGamePage() {
     socket.on(MINING_SOCKET_EVENTS.GAME_STATE, handleGameState);
 
     return () => {
-      socket.emit(MINING_SOCKET_EVENTS.LEAVE_ROOM, { session_id: session.id });
+      socket.emit(MINING_SOCKET_EVENTS.LEAVE_ROOM, { session_id: session.id, user_id: user?.id });
       socket.off(MINING_SOCKET_EVENTS.TAP_RESULT);
       socket.off(MINING_SOCKET_EVENTS.SYNC_COMBO);
       socket.off(MINING_SOCKET_EVENTS.PARTNER_TAPS);
@@ -390,6 +394,37 @@ export default function MiningGamePage() {
       socket.off(MINING_SOCKET_EVENTS.GAME_STATE);
     };
   }, [socket, session?.id, user?.id]);
+
+  // Listen for partner disconnect/leave events
+  useEffect(() => {
+    if (!socket || !session?.id) return;
+
+    const handlePartnerDisconnected = (data: { session_id: string; message: string }) => {
+      if (data.session_id === session.id) {
+        notificationOccurred?.('error');
+        setDisconnectMessage(data.message || 'Your partner has disconnected.');
+        setPartnerDisconnected(true);
+        setTimeout(() => navigate('/games'), 3000);
+      }
+    };
+
+    const handlePartnerLeft = (data: { session_id: string; message: string }) => {
+      if (data.session_id === session.id) {
+        notificationOccurred?.('error');
+        setDisconnectMessage(data.message || 'Your partner has left the game.');
+        setPartnerDisconnected(true);
+        setTimeout(() => navigate('/games'), 3000);
+      }
+    };
+
+    socket.on('mining:partner_disconnected', handlePartnerDisconnected);
+    socket.on('mining:partner_left', handlePartnerLeft);
+
+    return () => {
+      socket.off('mining:partner_disconnected', handlePartnerDisconnected);
+      socket.off('mining:partner_left', handlePartnerLeft);
+    };
+  }, [socket, session?.id, navigate]);
 
   // Initialize game
   useEffect(() => {
@@ -554,6 +589,27 @@ export default function MiningGamePage() {
         >
           Back to Games
         </button>
+      </div>
+    );
+  }
+
+  // Partner disconnected/left state
+  if (partnerDisconnected) {
+    return (
+      <div className="min-h-screen bg-dark flex flex-col items-center justify-center p-6">
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="text-center bg-dark-card rounded-2xl p-8 border border-red-500/30"
+        >
+          <div className="text-5xl mb-4">🚫</div>
+          <h2 className="text-xl font-bold text-white mb-2">Game Ended</h2>
+          <p className="text-white/60 mb-4">{disconnectMessage}</p>
+          <p className="text-sm text-white/40 mb-6">Redirecting to Games Hub...</p>
+          <button onClick={handleBack} className="px-6 py-3 bg-purple-600 rounded-xl font-bold text-white">
+            Back to Games
+          </button>
+        </motion.div>
       </div>
     );
   }

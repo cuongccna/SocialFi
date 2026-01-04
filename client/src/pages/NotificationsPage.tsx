@@ -241,7 +241,7 @@ export default function NotificationsPage() {
   return (
     <div className="h-full overflow-y-auto bg-dark-bg pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-dark-bg/95 backdrop-blur-sm border-b border-white/10">
+      <div className="sticky top-0 z-40 bg-dark-bg/95 backdrop-blur-sm border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <button

@@ -531,6 +531,9 @@ async function settleGame(sessionId) {
 // Socket Event Handlers
 // ============================================
 
+// Track which socket is in which game room
+const socketToCandleRoom = new Map(); // socket.id -> { session_id, user_id }
+
 function setupCandleKissSocketHandlers(io) {
   // Store io globally for settlement notifications
   global.io = io;
@@ -539,6 +542,10 @@ function setupCandleKissSocketHandlers(io) {
     // Join game room
     socket.on('candle:join', ({ session_id, user_id }) => {
       socket.join(`candle:${session_id}`);
+      
+      // Track this socket's game room
+      socketToCandleRoom.set(socket.id, { session_id, user_id });
+      
       console.log(`User ${user_id} joined candle room: ${session_id}`);
       
       // Send current state
@@ -551,9 +558,63 @@ function setupCandleKissSocketHandlers(io) {
       }
     });
 
-    // Leave room
-    socket.on('candle:leave', ({ session_id }) => {
+    // Leave room (explicit exit)
+    socket.on('candle:leave', async ({ session_id, user_id }) => {
       socket.leave(`candle:${session_id}`);
+      socketToCandleRoom.delete(socket.id);
+      
+      const session = getSession(session_id);
+      if (session) {
+        // Notify partner that user left
+        socket.to(`candle:${session_id}`).emit('candle:partner_left', {
+          session_id,
+          leaver_id: user_id,
+          message: 'Your partner has left the game.',
+        });
+        
+        // Mark game as abandoned in DB
+        try {
+          await query(
+            `UPDATE game_sessions SET completed = TRUE, status = 'ABANDONED' WHERE id = $1`,
+            [session_id]
+          );
+          activeSessions.delete(session_id);
+          console.log(`[CANDLE] Game ${session_id} abandoned - user left`);
+        } catch (err) {
+          console.error('[CANDLE] Error marking game as abandoned:', err);
+        }
+      }
+    });
+
+    // Handle socket disconnect
+    socket.on('disconnect', async () => {
+      const gameInfo = socketToCandleRoom.get(socket.id);
+      if (!gameInfo) return;
+      
+      const { session_id, user_id } = gameInfo;
+      socketToCandleRoom.delete(socket.id);
+      
+      const session = getSession(session_id);
+      if (session) {
+        // Notify partner that user disconnected
+        socket.to(`candle:${session_id}`).emit('candle:partner_disconnected', {
+          session_id,
+          disconnected_id: user_id,
+          message: 'Your partner has disconnected.',
+        });
+        
+        // Mark game as abandoned in DB
+        try {
+          await query(
+            `UPDATE game_sessions SET completed = TRUE, status = 'ABANDONED' WHERE id = $1`,
+            [session_id]
+          );
+          activeSessions.delete(session_id);
+          console.log(`[CANDLE] Game ${session_id} abandoned - socket disconnected`);
+        } catch (err) {
+          console.error('[CANDLE] Error marking game as abandoned:', err);
+        }
+      }
     });
 
     // Propose bet

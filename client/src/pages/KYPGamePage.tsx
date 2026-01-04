@@ -630,6 +630,13 @@ export default function KYPGamePage() {
   const [partnerBetReady, setPartnerBetReady] = useState(false);
   const [partnerAnswered, setPartnerAnswered] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  
+  // Disconnect/AFK state
+  const [partnerDisconnected, setPartnerDisconnected] = useState(false);
+  const [disconnectMessage, setDisconnectMessage] = useState<string>('');
+  const [afkTimer, setAfkTimer] = useState<number>(0);
+  const afkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const AFK_TIMEOUT = 60; // 60 seconds to wait for partner
 
   // Partner info (from location state or will be fetched)
   const [partnerInfo] = useState<{ name: string; avatar: string | null } | null>(
@@ -730,12 +737,53 @@ export default function KYPGamePage() {
     };
   }, [socket, session?.id, navigate]);
 
+  // Listen for partner disconnect/leave events
+  useEffect(() => {
+    if (!socket || !session?.id) return;
+
+    const handlePartnerDisconnected = (data: { session_id: string; message: string }) => {
+      console.log('🔌 Partner disconnected:', data);
+      if (data.session_id === session.id) {
+        haptic.notification('error');
+        setDisconnectMessage(data.message || 'Your partner has disconnected.');
+        setPartnerDisconnected(true);
+        
+        // Auto-navigate after 3 seconds
+        setTimeout(() => {
+          navigate('/games');
+        }, 3000);
+      }
+    };
+
+    const handlePartnerLeft = (data: { session_id: string; message: string }) => {
+      console.log('🚪 Partner left:', data);
+      if (data.session_id === session.id) {
+        haptic.notification('error');
+        setDisconnectMessage(data.message || 'Your partner has left the game.');
+        setPartnerDisconnected(true);
+        
+        // Auto-navigate after 3 seconds
+        setTimeout(() => {
+          navigate('/games');
+        }, 3000);
+      }
+    };
+
+    socket.on('kyp:partner_disconnected', handlePartnerDisconnected);
+    socket.on('kyp:partner_left', handlePartnerLeft);
+
+    return () => {
+      socket.off('kyp:partner_disconnected', handlePartnerDisconnected);
+      socket.off('kyp:partner_left', handlePartnerLeft);
+    };
+  }, [socket, session?.id, navigate]);
+
   // Setup KYP-specific socket listeners
   useEffect(() => {
     if (!socket || !session?.id) return;
 
-    // Join KYP game room
-    socket.emit('kyp:join', { session_id: session.id });
+    // Join KYP game room with user_id
+    socket.emit('kyp:join', { session_id: session.id, user_id: user?.id });
 
     // Setup KYP event listeners
     socket.on('kyp:state', handleSocketMessage.bind(null, KYP_SOCKET_EVENTS.GAME_STATE));
@@ -746,7 +794,7 @@ export default function KYPGamePage() {
     socket.on('kyp:game_end', handleSocketMessage.bind(null, KYP_SOCKET_EVENTS.GAME_END));
 
     return () => {
-      socket.emit('kyp:leave', { session_id: session.id });
+      socket.emit('kyp:leave', { session_id: session.id, user_id: user?.id });
       socket.off('kyp:state');
       socket.off('kyp:phase');
       socket.off('kyp:bet_update');
@@ -754,7 +802,7 @@ export default function KYPGamePage() {
       socket.off('kyp:round_result');
       socket.off('kyp:game_end');
     };
-  }, [socket, session?.id, handleSocketMessage]);
+  }, [socket, session?.id, user?.id, handleSocketMessage]);
 
   // Initialize game
   useEffect(() => {
@@ -773,6 +821,47 @@ export default function KYPGamePage() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [round?.round_number, round?.phase]);
+
+  // AFK Timer - start when waiting for partner (in betting or answering phase)
+  useEffect(() => {
+    const isWaitingForPartner = (
+      (round?.phase === 'BETTING' && myBet !== null && !partnerBetReady) ||
+      (round?.phase === 'ANSWERING' && myAnswer !== null && !partnerAnswered) ||
+      (session && (!round || round?.phase === 'WAITING' || session?.phase === 'WAITING'))
+    );
+
+    if (isWaitingForPartner && !partnerDisconnected) {
+      setAfkTimer(AFK_TIMEOUT);
+      afkTimerRef.current = setInterval(() => {
+        setAfkTimer(prev => {
+          if (prev <= 1) {
+            // AFK timeout reached
+            clearInterval(afkTimerRef.current!);
+            haptic.notification('error');
+            setDisconnectMessage('Partner is not responding. The game has ended.');
+            setPartnerDisconnected(true);
+            setTimeout(() => navigate('/games'), 3000);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      // Clear timer when partner responds
+      if (afkTimerRef.current) {
+        clearInterval(afkTimerRef.current);
+        afkTimerRef.current = null;
+      }
+      setAfkTimer(0);
+    }
+
+    return () => {
+      if (afkTimerRef.current) {
+        clearInterval(afkTimerRef.current);
+        afkTimerRef.current = null;
+      }
+    };
+  }, [round?.phase, myBet, myAnswer, partnerBetReady, partnerAnswered, session, partnerDisconnected, navigate]);
 
   const initGame = async () => {
     try {
@@ -913,6 +1002,27 @@ export default function KYPGamePage() {
     );
   }
 
+  // Partner disconnected/left state
+  if (partnerDisconnected) {
+    return (
+      <div className="h-full flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="text-center bg-dark-100 rounded-2xl p-8 border border-red-500/30"
+        >
+          <div className="text-5xl mb-4">🚫</div>
+          <h2 className="text-xl font-bold text-white mb-2">Game Ended</h2>
+          <p className="text-white/60 mb-4">{disconnectMessage}</p>
+          <p className="text-sm text-white/40 mb-6">Redirecting to Games Hub...</p>
+          <button onClick={handleExit} className="btn-primary">
+            Back to Games
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
   // Results screen
   if (result) {
     return (
@@ -976,8 +1086,13 @@ export default function KYPGamePage() {
       <div className="flex-1 overflow-y-auto">
         {/* Waiting for partner - show when session exists but round is null or phase is WAITING */}
         {session && (!round || round?.phase === 'WAITING' || session?.phase === 'WAITING') && (
-          <div className="h-full flex items-center justify-center">
+          <div className="h-full flex flex-col items-center justify-center">
             <PulsingHeart text="Waiting for partner to join..." />
+            {afkTimer > 0 && (
+              <p className="text-white/40 text-sm mt-4">
+                Timeout in {afkTimer}s
+              </p>
+            )}
           </div>
         )}
 
