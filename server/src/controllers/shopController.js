@@ -240,11 +240,18 @@ async function equipItem(req, res, next) {
 
     await client.query('BEGIN');
 
-    // Check if user is part of this relationship
+    // Debug: Check if relationship exists at all
+    const allRel = await client.query(`SELECT id, user_a, user_b, status FROM relationships WHERE id = $1`, [relationship_id]);
+    console.log('🔍 Relationship by ID:', allRel.rows);
+    console.log('🔍 Looking for userId:', userId, 'type:', typeof userId);
+
+    // Check if user is part of this relationship (any status - MATCHED or MINTED_CONTRACT)
     const relationshipCheck = await client.query(`
-      SELECT id FROM relationships
-      WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status = 'MATCHED'
+      SELECT id, status FROM relationships
+      WHERE id = $1 AND (user_a = $2 OR user_b = $2)
     `, [relationship_id, userId]);
+
+    console.log('🔍 Equip check - relationshipId:', relationship_id, 'userId:', userId, 'found:', relationshipCheck.rows);
 
     if (relationshipCheck.rows.length === 0) {
       throw new ApiError(403, 'You are not part of this relationship');
@@ -324,10 +331,10 @@ async function unequipItem(req, res, next) {
       throw new ApiError(400, 'Category and Relationship ID are required');
     }
 
-    // Check if user is part of this relationship
+    // Check if user is part of this relationship (any status)
     const relationshipCheck = await pool.query(`
       SELECT id FROM relationships
-      WHERE id = $1 AND (user_a = $2 OR user_b = $2) AND status = 'MATCHED'
+      WHERE id = $1 AND (user_a = $2 OR user_b = $2)
     `, [relationship_id, userId]);
 
     if (relationshipCheck.rows.length === 0) {
