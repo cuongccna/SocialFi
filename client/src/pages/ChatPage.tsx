@@ -642,7 +642,10 @@ export default function ChatPage() {
       </div>
 
       {/* Message Input */}
-      <div className="p-4 bg-dark-100/50 backdrop-blur-sm border-t border-white/10">
+      <div 
+        className="p-4 bg-dark-100/50 backdrop-blur-sm border-t border-white/10"
+        style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))' }}
+      >
         {/* Connection status indicator */}
         {!isConnected && (
           <div className="text-xs text-yellow-500/80 mb-2 text-center">

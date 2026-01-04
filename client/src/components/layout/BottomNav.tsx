@@ -88,6 +88,15 @@ export default function BottomNav() {
     clearGameInvites,
   } = useNotifications();
 
+  // Hide BottomNav when in chat conversation (has match param)
+  // This prevents the nav from covering the message input on mobile
+  const searchParams = new URLSearchParams(location.search);
+  const isInChatConversation = location.pathname === '/chat' && searchParams.has('match');
+  
+  if (isInChatConversation) {
+    return null;
+  }
+
   // Get badge count for a specific tab
   const getBadgeCount = (badgeKey?: 'messages' | 'rewards' | 'games'): number => {
     switch (badgeKey) {
