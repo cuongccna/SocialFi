@@ -147,9 +147,10 @@ export default function ChatPage() {
       // Load room decorations
       try {
         const decorData = await getRelationshipDecor(conversation.relationship_id);
+        console.log('🏠 Loaded decor for chat:', decorData);
         setDecor(decorData);
       } catch (decorErr) {
-        console.log('No decorations set for this chat');
+        console.log('No decorations set for this chat:', decorErr);
       }
       
       // Mark messages as read via socket
@@ -381,9 +382,12 @@ export default function ChatPage() {
   // Conversations List View
   if (!selectedConversation) {
     return (
-      <div className="h-full flex flex-col">
+      <div 
+        className="h-full flex flex-col"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px))' }}
+      >
         {/* Header */}
-        <div className="p-4 bg-dark-100/50 backdrop-blur-sm border-b border-white/10 flex items-center gap-3">
+        <div className="p-4 pt-2 bg-dark-100/50 backdrop-blur-sm border-b border-white/10 flex items-center gap-3">
           <button
             onClick={() => {
               haptic.impact('light');
@@ -480,7 +484,7 @@ export default function ChatPage() {
   return (
     <div 
       className="h-full flex flex-col relative"
-      style={{ paddingTop: 'var(--tg-content-safe-area-inset-top, 0px)' }}
+      style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px))' }}
     >
       {/* ========== PENTHOUSE DECORATION LAYERS ========== */}
       

@@ -92,6 +92,8 @@ export default function DecorShopPage() {
           i.id === item.id ? { ...i, is_owned: true } : i
         );
         setItems(updatedItems);
+        // Update selectedItem too so preview shows owned state
+        setSelectedItem({ ...item, is_owned: true });
       }
       
       // Refresh user balance
@@ -99,7 +101,23 @@ export default function DecorShopPage() {
       
       haptic.notification('success');
       showNotification('success', `🎉 Purchased ${item.name}!`);
-      setShowPreview(false);
+      
+      // Auto-equip if opened from chat
+      if (relationshipId) {
+        try {
+          await equipItem(item.id, relationshipId);
+          showNotification('success', `✨ ${item.name} equipped!`);
+          // Navigate back to chat after equip
+          setTimeout(() => {
+            navigate(-1);
+          }, 1000);
+        } catch (equipErr) {
+          console.log('Auto-equip failed:', equipErr);
+          // Don't close preview so user can manually equip
+        }
+      } else {
+        setShowPreview(false);
+      }
       
     } catch (err: any) {
       haptic.notification('error');
