@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Gamepad2 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
@@ -38,8 +38,16 @@ interface Notification {
 export default function GlobalNotification() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [isAccepting, setIsAccepting] = useState<string | null>(null); // Track which notification is being accepted
+
+  // Check if user is currently in a game screen
+  const isInGameScreen = useCallback(() => {
+    const gameRoutes = ['/games/kyp', '/games/mining', '/games/candle'];
+    return gameRoutes.some(route => location.pathname.startsWith(route));
+  }, [location.pathname]);
 
   // Initialize socket and register user
   useEffect(() => {
@@ -73,41 +81,95 @@ export default function GlobalNotification() {
     };
   }, [user]);
 
+  // Define dismissNotification first so it can be used in useEffect
+  const dismissNotification = useCallback((id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+
   // Listen for game invite events
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !user) return;
 
     const handleGameInvite = (data: GameInviteEvent) => {
       console.log('🎮 Received game invite:', data);
+      
+      // CRITICAL: Prevent self-invite loop - don't show popup if user is the inviter
+      if (data.inviterId === user.id) {
+        console.log('🚫 Ignoring self-invite (user is the inviter)');
+        return;
+      }
+      
+      // CRITICAL: Don't show invite if user is already in a game screen
+      if (isInGameScreen()) {
+        console.log('🚫 Ignoring invite - user is already in a game screen');
+        return;
+      }
+      
       haptic.notification('success');
       
+      const notificationId = `${data.gameId}_${Date.now()}`;
       const notification: Notification = {
-        id: `${data.gameId}_${Date.now()}`,
+        id: notificationId,
         type: 'game_invite',
         data,
         timestamp: new Date(),
       };
 
-      setNotifications(prev => [notification, ...prev]);
+      // Use functional update to check for duplicates and add
+      setNotifications(prev => {
+        // Check if we already have this game invite to prevent duplicates
+        const existingInvite = prev.find(
+          n => n.type === 'game_invite' && n.data.gameId === data.gameId
+        );
+        if (existingInvite) {
+          console.log('🚫 Ignoring duplicate invite for game:', data.gameId);
+          return prev;
+        }
+        return [notification, ...prev];
+      });
 
       // Auto-dismiss after 30 seconds
       setTimeout(() => {
-        dismissNotification(notification.id);
+        dismissNotification(notificationId);
       }, 30000);
+    };
+    
+    // Listen for game_start to close any open invite popups
+    const handleGameStart = (data: { gameId: string; gameType: string }) => {
+      console.log('🎮 Game started, closing invite popups:', data);
+      // Clear all game invite notifications for this game
+      setNotifications(prev => 
+        prev.filter(n => !(n.type === 'game_invite' && n.data.gameId === data.gameId))
+      );
     };
 
     socket.on('game_invite', handleGameInvite);
+    socket.on('game_start', handleGameStart);
+    
+    // Also listen for KYP-specific phase changes that indicate game started
+    socket.on('kyp:phase', (data: { phase: string }) => {
+      if (data.phase === 'BETTING' || data.phase === 'ANSWERING') {
+        // Game has started, clear all game invites
+        setNotifications(prev => prev.filter(n => n.type !== 'game_invite'));
+      }
+    });
 
     return () => {
       socket.off('game_invite', handleGameInvite);
+      socket.off('game_start', handleGameStart);
+      socket.off('kyp:phase');
     };
-  }, [socket]);
-
-  const dismissNotification = useCallback((id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  }, []);
+  }, [socket, user, isInGameScreen, dismissNotification]);
 
   const handleAccept = useCallback((notification: Notification) => {
+    // Prevent double-clicks - check if already accepting
+    if (isAccepting === notification.id) {
+      console.log('🚫 Already accepting this invite, preventing double-click');
+      return;
+    }
+    
+    // Disable the button immediately
+    setIsAccepting(notification.id);
     haptic.impact('medium');
     
     if (notification.type === 'game_invite') {
@@ -142,7 +204,9 @@ export default function GlobalNotification() {
     }
     
     dismissNotification(notification.id);
-  }, [navigate, dismissNotification]);
+    // Reset accepting state after navigation
+    setIsAccepting(null);
+  }, [navigate, dismissNotification, isAccepting]);
 
   const handleIgnore = useCallback(async (notification: Notification) => {
     haptic.impact('light');
@@ -228,15 +292,17 @@ export default function GlobalNotification() {
                 <div className="flex gap-2 mt-4">
                   <button
                     onClick={() => handleIgnore(currentNotification)}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium transition-all active:scale-95"
+                    disabled={isAccepting === currentNotification.id}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white/80 font-medium transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Ignore ❌
                   </button>
                   <button
                     onClick={() => handleAccept(currentNotification)}
-                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold transition-all active:scale-95 shadow-lg shadow-green-500/30"
+                    disabled={isAccepting === currentNotification.id}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold transition-all active:scale-95 shadow-lg shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Accept ✅
+                    {isAccepting === currentNotification.id ? 'Joining...' : 'Accept ✅'}
                   </button>
                 </div>
 

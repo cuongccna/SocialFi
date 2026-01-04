@@ -31,6 +31,9 @@ import GlobalNotification from './components/GlobalNotification';
 function App() {
   const { isLoading, isAuthenticated, error } = useAuth();
 
+  // Note: Telegram WebApp viewport setup is handled in main.tsx via initTelegramWebApp()
+  // This includes: disableVerticalSwipes, viewport height CSS vars, and viewportChanged listener
+
   // Show loading screen while authenticating
   if (isLoading) {
     return <AuthLoadingScreen />;

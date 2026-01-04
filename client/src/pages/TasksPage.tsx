@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/axiosClient';
 import { haptic } from '../utils/telegram';
+import { useNotifications } from '../context/NotificationContext';
 
 interface Task {
   id: string;
@@ -34,6 +35,7 @@ interface Task {
 
 export default function TasksPage() {
   const navigate = useNavigate();
+  const { hasClaimableTask, removeClaimableTask } = useNotifications();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState<string | null>(null);
@@ -76,6 +78,9 @@ export default function TasksPage() {
       
       await api.post(`/tasks/${taskId}/claim`);
       haptic.notification('success');
+      
+      // Remove from claimable set after successful claim
+      removeClaimableTask(taskId);
       
       // Reload tasks
       await loadTasks();
@@ -136,6 +141,7 @@ export default function TasksPage() {
                   key={task.id}
                   task={task}
                   claiming={claiming === task.id}
+                  isClaimable={hasClaimableTask(task.id)}
                   onClaim={() => claimTask(task.id)}
                 />
               ))}
@@ -156,6 +162,7 @@ export default function TasksPage() {
                   key={task.id}
                   task={task}
                   claiming={claiming === task.id}
+                  isClaimable={hasClaimableTask(task.id)}
                   onClaim={() => claimTask(task.id)}
                 />
               ))}
@@ -176,6 +183,7 @@ export default function TasksPage() {
                   key={task.id}
                   task={task}
                   claiming={claiming === task.id}
+                  isClaimable={hasClaimableTask(task.id)}
                   onClaim={() => claimTask(task.id)}
                 />
               ))}
@@ -190,15 +198,20 @@ export default function TasksPage() {
 interface TaskCardProps {
   task: Task;
   claiming: boolean;
+  isClaimable: boolean;
   onClaim: () => void;
 }
 
-function TaskCard({ task, claiming, onClaim }: TaskCardProps) {
+function TaskCard({ task, claiming, isClaimable, onClaim }: TaskCardProps) {
   const progress = Math.min(task.current_progress / task.requirement_value, 1);
   const canClaim = task.current_progress >= task.requirement_value && !task.is_completed;
 
   return (
-    <div className={`bg-dark-card rounded-xl p-4 ${task.is_completed ? 'opacity-60' : ''}`}>
+    <div className={`bg-dark-card rounded-xl p-4 ${task.is_completed ? 'opacity-60' : ''} ${isClaimable ? 'ring-2 ring-neon-green/70 relative' : ''}`}>
+      {/* Claimable indicator dot */}
+      {isClaimable && (
+        <span className="absolute -top-1 -right-1 w-3 h-3 bg-neon-green rounded-full animate-pulse" />
+      )}
       <div className="flex items-start gap-3">
         <div className="mt-1">
           {task.is_completed ? (

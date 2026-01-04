@@ -11,6 +11,7 @@ import {
   Loader2, X, Flame
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useNotifications } from '../context/NotificationContext';
 import { haptic } from '../utils/telegram';
 import {
   getGameStats,
@@ -36,9 +37,10 @@ interface GameCardProps {
   tickets: number;
   onPlay: () => void;
   isLoading: boolean;
+  hasPendingInvite?: boolean;
 }
 
-function GameCard({ game, userStreak, tickets, onPlay, isLoading }: GameCardProps) {
+function GameCard({ game, userStreak, tickets, onPlay, isLoading, hasPendingInvite }: GameCardProps) {
   const { canPlay, reason } = canPlayGame(game, userStreak, tickets);
   const isLocked = game.requiredStreak > 0 && userStreak < game.requiredStreak;
 
@@ -81,6 +83,18 @@ function GameCard({ game, userStreak, tickets, onPlay, isLoading }: GameCardProp
         <div className={`absolute top-3 right-3 px-2 py-1 rounded-full text-xs font-bold ${game.tagColor}`}>
           {game.tag}
         </div>
+
+        {/* Challenge Badge - shown when there's a pending game invite */}
+        {hasPendingInvite && !isLocked && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg flex items-center gap-1"
+          >
+            <span className="animate-pulse">⚔️</span>
+            1 Challenge
+          </motion.div>
+        )}
 
         {/* Lock Overlay */}
         {isLocked && (
@@ -236,6 +250,7 @@ function RefillModal({ isOpen, onClose, onRefill, isLoading, userBalance }: Refi
 export default function GameHubPage() {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
+  const { pendingGameInviteIds, clearGameInvites } = useNotifications();
   
   const [stats, setStats] = useState<GameStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -245,6 +260,11 @@ export default function GameHubPage() {
   const [pendingGame, setPendingGame] = useState<GameType | null>(null);
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [selectedGameForPartner, setSelectedGameForPartner] = useState<GameType | null>(null);
+
+  // Clear game invites when entering the arcade
+  useEffect(() => {
+    clearGameInvites();
+  }, [clearGameInvites]);
 
   // Load game stats on mount
   useEffect(() => {
@@ -500,6 +520,7 @@ export default function GameHubPage() {
               tickets={tickets}
               onPlay={() => handlePlayGame(game.id)}
               isLoading={isPlayLoading === game.id}
+              hasPendingInvite={pendingGameInviteIds.size > 0}
             />
           ))}
         </div>

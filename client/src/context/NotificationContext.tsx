@@ -1,6 +1,6 @@
 /**
  * Notification Context
- * Manages notification badge counts for bottom navigation
+ * Manages notification badge counts and granular unread/pending tracking
  */
 
 import {
@@ -9,6 +9,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react';
 import { io, Socket } from 'socket.io-client';
@@ -32,27 +33,52 @@ interface BadgeStatusResponse {
   unread_messages: number;
   unclaimed_tasks: number;
   pending_game_invites: number;
+  // Granular data (new fields from API)
+  unread_chat_ids?: string[];
+  claimable_task_ids?: string[];
+  pending_game_invite_ids?: string[];
 }
 
-// Context state
+// Context state - now with Sets for granular tracking
 interface NotificationState {
-  unreadMessagesCount: number;
-  unclaimedRewardsCount: number;
-  pendingGameInvites: number;
+  // Granular tracking with Sets of IDs
+  unreadChatIds: Set<string>;        // relationship_ids with unread messages
+  pendingGameInviteIds: Set<string>; // user_ids of challengers (or game session IDs)
+  claimableTaskIds: Set<string>;     // task IDs that can be claimed
+  
+  // Loading state
   isLoading: boolean;
 }
 
+// Derived counts for backward compatibility
+interface NotificationCounts {
+  unreadMessagesCount: number;
+  unclaimedRewardsCount: number;
+  pendingGameInvites: number;
+}
+
 // Context value including actions
-interface NotificationContextValue extends NotificationState {
+interface NotificationContextValue extends NotificationState, NotificationCounts {
   // Refresh badge counts from API
   refreshBadges: () => Promise<void>;
   
-  // Increment counts (for real-time updates)
+  // Granular add/remove functions
+  addUnreadChat: (relationshipId: string) => void;
+  removeUnreadChat: (relationshipId: string) => void;
+  hasUnreadChat: (relationshipId: string) => boolean;
+  
+  addGameInvite: (inviteId: string) => void;
+  removeGameInvite: (inviteId: string) => void;
+  hasGameInvite: (inviteId: string) => boolean;
+  
+  addClaimableTask: (taskId: string) => void;
+  removeClaimableTask: (taskId: string) => void;
+  hasClaimableTask: (taskId: string) => boolean;
+  
+  // Legacy increment/clear functions (for backward compatibility)
   incrementUnreadMessages: (amount?: number) => void;
   incrementUnclaimedRewards: (amount?: number) => void;
   incrementGameInvites: (amount?: number) => void;
-  
-  // Clear/decrement counts (for when user views content)
   clearUnreadMessages: () => void;
   decrementUnreadMessages: (amount?: number) => void;
   clearUnclaimedRewards: () => void;
@@ -74,20 +100,27 @@ interface NotificationProviderProps {
 
 /**
  * Notification Provider Component
- * Manages badge counts and real-time updates
+ * Manages badge counts and real-time updates with granular ID tracking
  */
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const { user, isAuthenticated } = useAuth();
   
   const [state, setState] = useState<NotificationState>({
-    unreadMessagesCount: 0,
-    unclaimedRewardsCount: 0,
-    pendingGameInvites: 0,
+    unreadChatIds: new Set(),
+    pendingGameInviteIds: new Set(),
+    claimableTaskIds: new Set(),
     isLoading: true,
   });
   
   const [activeChat, setActiveChat] = useState<string | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
+
+  // Derived counts from Sets (memoized for performance)
+  const counts: NotificationCounts = useMemo(() => ({
+    unreadMessagesCount: state.unreadChatIds.size,
+    unclaimedRewardsCount: state.claimableTaskIds.size,
+    pendingGameInvites: state.pendingGameInviteIds.size,
+  }), [state.unreadChatIds.size, state.pendingGameInviteIds.size, state.claimableTaskIds.size]);
 
   /**
    * Fetch badge counts from API
@@ -101,9 +134,22 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       if (response.success) {
         setState(prev => ({
           ...prev,
-          unreadMessagesCount: response.unread_messages || 0,
-          unclaimedRewardsCount: response.unclaimed_tasks || 0,
-          pendingGameInvites: response.pending_game_invites || 0,
+          // Use granular IDs if available from API, otherwise create placeholder sets
+          unreadChatIds: response.unread_chat_ids 
+            ? new Set(response.unread_chat_ids) 
+            : prev.unreadChatIds.size > 0 
+              ? prev.unreadChatIds 
+              : new Set(Array.from({ length: response.unread_messages || 0 }, (_, i) => `unread_${i}`)),
+          claimableTaskIds: response.claimable_task_ids 
+            ? new Set(response.claimable_task_ids) 
+            : prev.claimableTaskIds.size > 0 
+              ? prev.claimableTaskIds 
+              : new Set(Array.from({ length: response.unclaimed_tasks || 0 }, (_, i) => `task_${i}`)),
+          pendingGameInviteIds: response.pending_game_invite_ids 
+            ? new Set(response.pending_game_invite_ids) 
+            : prev.pendingGameInviteIds.size > 0 
+              ? prev.pendingGameInviteIds 
+              : new Set(Array.from({ length: response.pending_game_invites || 0 }, (_, i) => `invite_${i}`)),
           isLoading: false,
         }));
       }
@@ -113,60 +159,148 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
   }, [isAuthenticated]);
 
-  // Increment functions
+  // ============================================
+  // Granular Set Operations
+  // ============================================
+  
+  const addUnreadChat = useCallback((relationshipId: string) => {
+    setState(prev => {
+      const newSet = new Set(prev.unreadChatIds);
+      newSet.add(relationshipId);
+      return { ...prev, unreadChatIds: newSet };
+    });
+  }, []);
+
+  const removeUnreadChat = useCallback((relationshipId: string) => {
+    setState(prev => {
+      const newSet = new Set(prev.unreadChatIds);
+      newSet.delete(relationshipId);
+      return { ...prev, unreadChatIds: newSet };
+    });
+  }, []);
+
+  const hasUnreadChat = useCallback((relationshipId: string) => {
+    return state.unreadChatIds.has(relationshipId);
+  }, [state.unreadChatIds]);
+
+  const addGameInvite = useCallback((inviteId: string) => {
+    setState(prev => {
+      const newSet = new Set(prev.pendingGameInviteIds);
+      newSet.add(inviteId);
+      return { ...prev, pendingGameInviteIds: newSet };
+    });
+  }, []);
+
+  const removeGameInvite = useCallback((inviteId: string) => {
+    setState(prev => {
+      const newSet = new Set(prev.pendingGameInviteIds);
+      newSet.delete(inviteId);
+      return { ...prev, pendingGameInviteIds: newSet };
+    });
+  }, []);
+
+  const hasGameInvite = useCallback((inviteId: string) => {
+    return state.pendingGameInviteIds.has(inviteId);
+  }, [state.pendingGameInviteIds]);
+
+  const addClaimableTask = useCallback((taskId: string) => {
+    setState(prev => {
+      const newSet = new Set(prev.claimableTaskIds);
+      newSet.add(taskId);
+      return { ...prev, claimableTaskIds: newSet };
+    });
+  }, []);
+
+  const removeClaimableTask = useCallback((taskId: string) => {
+    setState(prev => {
+      const newSet = new Set(prev.claimableTaskIds);
+      newSet.delete(taskId);
+      return { ...prev, claimableTaskIds: newSet };
+    });
+  }, []);
+
+  const hasClaimableTask = useCallback((taskId: string) => {
+    return state.claimableTaskIds.has(taskId);
+  }, [state.claimableTaskIds]);
+
+  // ============================================
+  // Legacy Functions (for backward compatibility)
+  // ============================================
+
   const incrementUnreadMessages = useCallback((amount = 1) => {
-    setState(prev => ({
-      ...prev,
-      unreadMessagesCount: prev.unreadMessagesCount + amount,
-    }));
+    // Add placeholder IDs for compatibility
+    setState(prev => {
+      const newSet = new Set(prev.unreadChatIds);
+      for (let i = 0; i < amount; i++) {
+        newSet.add(`unread_${Date.now()}_${i}`);
+      }
+      return { ...prev, unreadChatIds: newSet };
+    });
   }, []);
 
   const incrementUnclaimedRewards = useCallback((amount = 1) => {
-    setState(prev => ({
-      ...prev,
-      unclaimedRewardsCount: prev.unclaimedRewardsCount + amount,
-    }));
+    setState(prev => {
+      const newSet = new Set(prev.claimableTaskIds);
+      for (let i = 0; i < amount; i++) {
+        newSet.add(`task_${Date.now()}_${i}`);
+      }
+      return { ...prev, claimableTaskIds: newSet };
+    });
   }, []);
 
   const incrementGameInvites = useCallback((amount = 1) => {
-    setState(prev => ({
-      ...prev,
-      pendingGameInvites: prev.pendingGameInvites + amount,
-    }));
+    setState(prev => {
+      const newSet = new Set(prev.pendingGameInviteIds);
+      for (let i = 0; i < amount; i++) {
+        newSet.add(`invite_${Date.now()}_${i}`);
+      }
+      return { ...prev, pendingGameInviteIds: newSet };
+    });
   }, []);
 
-  // Clear functions
   const clearUnreadMessages = useCallback(() => {
-    setState(prev => ({ ...prev, unreadMessagesCount: 0 }));
+    setState(prev => ({ ...prev, unreadChatIds: new Set() }));
   }, []);
 
   const decrementUnreadMessages = useCallback((amount = 1) => {
-    setState(prev => ({
-      ...prev,
-      unreadMessagesCount: Math.max(0, prev.unreadMessagesCount - amount),
-    }));
+    setState(prev => {
+      const newSet = new Set(prev.unreadChatIds);
+      const arr = Array.from(newSet);
+      for (let i = 0; i < amount && arr.length > 0; i++) {
+        newSet.delete(arr[arr.length - 1 - i]);
+      }
+      return { ...prev, unreadChatIds: newSet };
+    });
   }, []);
 
   const clearUnclaimedRewards = useCallback(() => {
-    setState(prev => ({ ...prev, unclaimedRewardsCount: 0 }));
+    setState(prev => ({ ...prev, claimableTaskIds: new Set() }));
   }, []);
 
   const decrementUnclaimedRewards = useCallback((amount = 1) => {
-    setState(prev => ({
-      ...prev,
-      unclaimedRewardsCount: Math.max(0, prev.unclaimedRewardsCount - amount),
-    }));
+    setState(prev => {
+      const newSet = new Set(prev.claimableTaskIds);
+      const arr = Array.from(newSet);
+      for (let i = 0; i < amount && arr.length > 0; i++) {
+        newSet.delete(arr[arr.length - 1 - i]);
+      }
+      return { ...prev, claimableTaskIds: newSet };
+    });
   }, []);
 
   const clearGameInvites = useCallback(() => {
-    setState(prev => ({ ...prev, pendingGameInvites: 0 }));
+    setState(prev => ({ ...prev, pendingGameInviteIds: new Set() }));
   }, []);
 
   const decrementGameInvites = useCallback((amount = 1) => {
-    setState(prev => ({
-      ...prev,
-      pendingGameInvites: Math.max(0, prev.pendingGameInvites - amount),
-    }));
+    setState(prev => {
+      const newSet = new Set(prev.pendingGameInviteIds);
+      const arr = Array.from(newSet);
+      for (let i = 0; i < amount && arr.length > 0; i++) {
+        newSet.delete(arr[arr.length - 1 - i]);
+      }
+      return { ...prev, pendingGameInviteIds: newSet };
+    });
   }, []);
 
   // Initialize socket for real-time updates
@@ -205,31 +339,40 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   useEffect(() => {
     if (!socket) return;
 
-    // Handle new messages - increment if not in that chat room
+    // Handle new messages - add the relationship_id to unread set
     const handleReceiveMessage = (data: { relationship_id: string; sender_id: string }) => {
       console.log('📩 Received message notification:', data, 'activeChat:', activeChat, 'userId:', user?.id);
-      // Don't increment if user is currently viewing that chat
+      // Don't add to unread if user is currently viewing that chat
       if (activeChat !== data.relationship_id && data.sender_id !== user?.id) {
-        console.log('📩 Incrementing unread messages count');
-        incrementUnreadMessages();
+        console.log('📩 Adding to unread chats:', data.relationship_id);
+        addUnreadChat(data.relationship_id);
       } else {
-        console.log('📩 Skipping increment - user in chat or is sender');
+        console.log('📩 Skipping - user in chat or is sender');
       }
     };
 
     // Handle task completion notifications
-    const handleTaskCompleted = () => {
-      incrementUnclaimedRewards();
+    const handleTaskCompleted = (data: { task_id?: string }) => {
+      if (data?.task_id) {
+        addClaimableTask(data.task_id);
+      } else {
+        incrementUnclaimedRewards();
+      }
     };
 
     // Handle referral success
-    const handleReferralSuccess = () => {
-      incrementUnclaimedRewards();
+    const handleReferralSuccess = (data: { task_id?: string }) => {
+      if (data?.task_id) {
+        addClaimableTask(data.task_id);
+      } else {
+        incrementUnclaimedRewards();
+      }
     };
 
-    // Handle game invites
-    const handleGameInvite = () => {
-      incrementGameInvites();
+    // Handle game invites - add the inviter's ID
+    const handleGameInvite = (data: { inviterId?: string; gameId?: string }) => {
+      const inviteId = data?.inviterId || data?.gameId || `invite_${Date.now()}`;
+      addGameInvite(inviteId);
     };
 
     socket.on('receive_message', handleReceiveMessage);
@@ -245,7 +388,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       socket.off('referral_success', handleReferralSuccess);
       socket.off('game_invite', handleGameInvite);
     };
-  }, [socket, activeChat, user?.id, incrementUnreadMessages, incrementUnclaimedRewards, incrementGameInvites]);
+  }, [socket, activeChat, user?.id, addUnreadChat, addClaimableTask, addGameInvite, incrementUnclaimedRewards]);
 
   // Fetch badge counts on mount and when authenticated
   useEffect(() => {
@@ -256,7 +399,19 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
   const value: NotificationContextValue = {
     ...state,
+    ...counts,
     refreshBadges,
+    // Granular operations
+    addUnreadChat,
+    removeUnreadChat,
+    hasUnreadChat,
+    addGameInvite,
+    removeGameInvite,
+    hasGameInvite,
+    addClaimableTask,
+    removeClaimableTask,
+    hasClaimableTask,
+    // Legacy operations
     incrementUnreadMessages,
     incrementUnclaimedRewards,
     incrementGameInvites,

@@ -119,7 +119,14 @@ export default function BottomNav() {
   };
 
   return (
-    <nav className="flex-shrink-0 bg-dark-100 border-t border-white/10 px-4 py-2 pb-safe">
+    <nav 
+      className="flex-shrink-0 border-t border-white/10 px-4 py-2 z-50"
+      style={{
+        backgroundColor: 'rgb(20, 20, 25)', // Solid background to cover content
+        paddingBottom: 'max(env(safe-area-inset-bottom, 20px), 12px)',
+        minHeight: '72px', // Slightly increased to account for safe area
+      }}
+    >
       <div className="flex items-center justify-around max-w-md mx-auto">
         {navItems.map((item) => (
           <NavLink

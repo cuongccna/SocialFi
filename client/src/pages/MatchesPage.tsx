@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, TrendingUp, Loader2, RefreshCw, Sparkles, Flame, TrendingDown, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { getMatches, formatTimeAgo, mintContract, type Match, type NftData } from '../services/matches.service';
 import { fudUser, getFudStatus, type FudStatus } from '../services/profile.service';
 import { haptic } from '../utils/telegram';
+import { useNotifications } from '../context/NotificationContext';
 import CertificateModal from '../components/CertificateModal';
 
 export default function MatchesPage() {
+  const navigate = useNavigate();
+  const { hasUnreadChat, removeUnreadChat } = useNotifications();
   const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -410,7 +414,9 @@ export default function MatchesPage() {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold truncate">{match.display_name}</h3>
+                  <h3 className={`truncate ${hasUnreadChat(match.relationship_id) ? 'font-bold text-white' : 'font-semibold'}`}>
+                    {match.display_name}
+                  </h3>
                   {match.status === 'MINTED_CONTRACT' && (
                     <span className="text-xs px-2 py-0.5 bg-neon-purple/20 text-neon-purple rounded-full flex items-center gap-1">
                       <Sparkles className="w-3 h-3" />
@@ -428,17 +434,30 @@ export default function MatchesPage() {
                     {(match.price_change_24h || 0).toFixed(2)}%
                   </span>
                   <span>•</span>
-                  <span>{formatTimeAgo(match.matched_at)}</span>
+                  <span className="flex items-center gap-1">
+                    {hasUnreadChat(match.relationship_id) && (
+                      <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                    )}
+                    {formatTimeAgo(match.matched_at)}
+                  </span>
                 </div>
               </div>
 
               {/* Action - Chat Button */}
-              <a 
-                href={`/chat?match=${match.relationship_id}`}
-                className="p-3 rounded-full bg-primary/20 hover:bg-primary/30 transition-colors"
+              <button
+                onClick={() => {
+                  // Mark as read when clicking to chat
+                  removeUnreadChat(match.relationship_id);
+                  navigate(`/chat?match=${match.relationship_id}`);
+                }}
+                className="relative p-3 rounded-full bg-primary/20 hover:bg-primary/30 transition-colors"
               >
                 <MessageCircle className="w-5 h-5 text-primary" />
-              </a>
+                {/* Unread dot on chat button */}
+                {hasUnreadChat(match.relationship_id) && (
+                  <span className="absolute top-0 right-0 w-3 h-3 bg-blue-500 rounded-full border-2 border-dark-100 animate-pulse" />
+                )}
+              </button>
             </div>
 
             {/* Combined Market Cap & Action Buttons */}
