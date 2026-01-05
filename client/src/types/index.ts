@@ -1,3 +1,9 @@
+// Asset type for crypto holdings display
+export interface UserAsset {
+  symbol: string;
+  amount?: number;
+}
+
 // User types
 export interface User {
   id: string;
@@ -17,6 +23,11 @@ export interface User {
   last_active_at: string | null;
   boosted_until: string | null;
   login_streak?: number; // For game unlocks
+  // Profile fields
+  job_title: string | null;
+  interests: string[] | null; // e.g., ['DeFi', 'NFT', 'Travel']
+  assets: UserAsset[] | null; // e.g., [{symbol: 'BTC'}, {symbol: 'ETH'}]
+  photos: string[] | null; // Array of photo URLs (max 4)
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +36,8 @@ export interface User {
 export interface FeedUser extends User {
   distance_km: number;
   is_new_listing?: boolean; // Profile IDO - user created within 24 hours
+  source?: 'local' | 'global' | 'resurrected' | 'resurrected_like' | 'random_fill' | 'genesis'; // Debug: where this user came from
+  chart_data?: number[]; // Price history for mini chart
 }
 
 // Swipe types

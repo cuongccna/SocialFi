@@ -83,6 +83,10 @@ async function getCurrentUser(req, res, next) {
         display_name,
         avatar_url,
         bio,
+        job_title,
+        interests,
+        assets,
+        photos,
         wallet_address,
         wallet_rank,
         market_price,
@@ -116,7 +120,39 @@ async function getCurrentUser(req, res, next) {
 async function updateProfile(req, res, next) {
   try {
     const userId = req.user.id;
-    const { display_name, bio, avatar_url } = req.body;
+    const { display_name, bio, avatar_url, job_title, interests, assets, photos } = req.body;
+
+    // Validate bio length (max 150 chars)
+    if (bio && bio.length > 150) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bio must be 150 characters or less' 
+      });
+    }
+
+    // Validate interests (max 5)
+    if (interests && interests.length > 5) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Maximum 5 interests allowed' 
+      });
+    }
+
+    // Validate assets (max 3)
+    if (assets && assets.length > 3) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Maximum 3 assets allowed' 
+      });
+    }
+
+    // Validate photos (max 4)
+    if (photos && photos.length > 4) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Maximum 4 photos allowed' 
+      });
+    }
 
     const result = await pool.query(`
       UPDATE users
@@ -124,10 +160,23 @@ async function updateProfile(req, res, next) {
         display_name = COALESCE($2, display_name),
         bio = COALESCE($3, bio),
         avatar_url = COALESCE($4, avatar_url),
+        job_title = COALESCE($5, job_title),
+        interests = COALESCE($6::jsonb, interests),
+        assets = COALESCE($7::jsonb, assets),
+        photos = COALESCE($8::jsonb, photos),
         updated_at = NOW()
       WHERE id = $1
       RETURNING *
-    `, [userId, display_name, bio, avatar_url]);
+    `, [
+      userId, 
+      display_name, 
+      bio, 
+      avatar_url, 
+      job_title,
+      interests ? JSON.stringify(interests) : null,
+      assets ? JSON.stringify(assets) : null,
+      photos ? JSON.stringify(photos) : null
+    ]);
 
     res.json({
       success: true,
@@ -459,6 +508,48 @@ async function uploadAvatar(req, res, next) {
   }
 }
 
+// Photo upload directory (for profile gallery)
+const PHOTO_UPLOAD_DIR = path.join(__dirname, '../../../public/photos');
+
+/**
+ * POST /users/photos
+ * Upload profile photo for gallery (up to 4 photos)
+ */
+async function uploadPhoto(req, res, next) {
+  try {
+    const userId = req.user.id;
+    
+    if (!req.file) {
+      throw new ApiError(400, 'No file uploaded');
+    }
+    
+    // Ensure directory exists
+    if (!fs.existsSync(PHOTO_UPLOAD_DIR)) {
+      fs.mkdirSync(PHOTO_UPLOAD_DIR, { recursive: true });
+    }
+    
+    // Generate unique filename
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const filename = `photo_${userId}_${Date.now()}${ext}`;
+    const filepath = path.join(PHOTO_UPLOAD_DIR, filename);
+    
+    // Write file
+    fs.writeFileSync(filepath, req.file.buffer);
+    
+    // Create URL path (relative to public folder)
+    const photoUrl = `/public/photos/${filename}`;
+    
+    res.json({
+      success: true,
+      url: photoUrl,
+      message: 'Photo uploaded successfully!',
+    });
+    
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getUserStats,
   getCurrentUser,
@@ -467,5 +558,6 @@ module.exports = {
   boostProfile,
   getBoostStatus,
   uploadAvatar,
+  uploadPhoto,
   getBadgeStatus,
 };

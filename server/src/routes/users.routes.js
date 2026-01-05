@@ -15,6 +15,7 @@ const {
   boostProfile,
   getBoostStatus,
   uploadAvatar,
+  uploadPhoto,
   getBadgeStatus,
 } = require('../controllers/usersController');
 
@@ -51,6 +52,9 @@ router.put('/me', updateProfile);
 
 // POST /users/avatar - Upload avatar image
 router.post('/avatar', upload.single('avatar'), uploadAvatar);
+
+// POST /users/photos - Upload profile photo for gallery
+router.post('/photos', upload.single('photo'), uploadPhoto);
 
 // GET /users/boost-status - Check boost status
 router.get('/boost-status', getBoostStatus);

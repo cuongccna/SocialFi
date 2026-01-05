@@ -5,6 +5,7 @@
 
 import { api } from '../api/axiosClient';
 import { getInitData } from '../utils/telegram';
+import type { User, UserAsset } from '../types';
 
 export interface UserStats {
   total_likes_received: number;
@@ -22,10 +23,20 @@ interface StatsResponse {
   stats: UserStats;
 }
 
-interface ProfileUpdateRequest {
+// Extended profile update request
+export interface ProfileUpdateRequest {
   display_name?: string;
   bio?: string;
   avatar_url?: string;
+  job_title?: string;
+  interests?: string[];
+  assets?: UserAsset[];
+  photos?: string[];
+}
+
+export interface ProfileUpdateResponse {
+  success: boolean;
+  user: User;
 }
 
 /**
@@ -53,8 +64,34 @@ export async function getUserStats(): Promise<UserStats> {
 /**
  * Update user profile
  */
-export async function updateProfile(data: ProfileUpdateRequest): Promise<void> {
-  await api.patch('/users/profile', data);
+export async function updateProfile(data: ProfileUpdateRequest): Promise<ProfileUpdateResponse> {
+  return await api.put<ProfileUpdateResponse>('/users/me', data);
+}
+
+/**
+ * Upload profile photo (for photo gallery)
+ * Returns the URL of the uploaded photo
+ */
+export async function uploadProfilePhoto(file: File): Promise<{ success: boolean; url: string }> {
+  const formData = new FormData();
+  formData.append('photo', file);
+  
+  const initData = getInitData();
+  
+  const response = await fetch('/api/users/photos', {
+    method: 'POST',
+    headers: {
+      'Authorization': initData || '',
+    },
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to upload photo');
+  }
+  
+  return response.json();
 }
 
 /**

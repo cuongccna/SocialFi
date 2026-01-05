@@ -25,6 +25,7 @@ import CandleKissPage from './pages/CandleKissPage';
 import EarnHub from './pages/EarnHub';
 import NotificationsPage from './pages/NotificationsPage';
 import DecorShopPage from './pages/DecorShopPage';
+import EditProfilePage from './pages/EditProfilePage';
 
 // Layout
 import BottomNav from './components/layout/BottomNav';
@@ -95,6 +96,7 @@ function App() {
           <Route path="/" element={<Navigate to="/feed" replace />} />
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/profile/edit" element={<EditProfilePage />} />
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/markets" element={<MarketsPage />} />

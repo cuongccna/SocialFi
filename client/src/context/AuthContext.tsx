@@ -95,6 +95,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             is_active: true,
             last_active_at: new Date().toISOString(),
             boosted_until: null,
+            job_title: null,
+            interests: null,
+            assets: null,
+            photos: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };

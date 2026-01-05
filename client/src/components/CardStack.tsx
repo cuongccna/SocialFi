@@ -741,6 +741,22 @@ function SwipeCard({
           <IDOBadge createdAt={profile.created_at} />
         )}
 
+        {/* DEBUG: User ID and Source Overlay */}
+        {!showMystery && (
+          <div className="absolute top-4 left-4 z-50 flex flex-col gap-1">
+            <div className="px-2 py-1 bg-red-600/90 text-white text-[10px] font-mono rounded shadow-lg">
+              ID: {profile.id?.substring(0, 8)}...
+            </div>
+            <div className={`px-2 py-1 text-[10px] font-mono rounded shadow-lg ${
+              profile.source === 'genesis' 
+                ? 'bg-yellow-600/90 text-black' 
+                : 'bg-green-600/90 text-white'
+            }`}>
+              {profile.source === 'genesis' ? '⚠️ FAKE (genesis)' : `✅ REAL (${profile.source || 'db'})`}
+            </div>
+          </div>
+        )}
+
         {/* Whale Indicator */}
         {profile.wallet_rank === 'WHALE' && !showMystery && (
           <motion.div
