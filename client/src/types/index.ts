@@ -28,6 +28,8 @@ export interface User {
   interests: string[] | null; // e.g., ['DeFi', 'NFT', 'Travel']
   assets: UserAsset[] | null; // e.g., [{symbol: 'BTC'}, {symbol: 'ETH'}]
   photos: string[] | null; // Array of photo URLs (max 4)
+  // Tutorial
+  has_seen_tutorial: boolean;
   created_at: string;
   updated_at: string;
 }

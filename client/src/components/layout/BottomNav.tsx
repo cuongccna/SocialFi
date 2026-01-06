@@ -143,6 +143,7 @@ export default function BottomNav() {
             key={item.to}
             to={item.to}
             onClick={() => handleTabClick(item)}
+            data-tour={item.to === '/matches' ? 'matches-tab' : item.to === '/games' ? 'arcade-tab' : undefined}
             className={({ isActive }) =>
               `relative flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all duration-200 ${
                 isActive

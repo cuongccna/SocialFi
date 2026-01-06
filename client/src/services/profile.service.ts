@@ -39,6 +39,14 @@ export interface ProfileUpdateResponse {
   user: User;
 }
 
+export interface TutorialCompleteResponse {
+  success: boolean;
+  message: string;
+  bonus_awarded: boolean;
+  bonus_amount?: number;
+  user?: User;
+}
+
 /**
  * Get user stats
  */
@@ -228,4 +236,12 @@ export async function uploadAvatar(file: File): Promise<UploadAvatarResult> {
   }
   
   return response.json();
+}
+
+/**
+ * Mark onboarding tutorial as complete
+ * Rewards user with 100 $LOVE
+ */
+export async function completeTutorial(): Promise<TutorialCompleteResponse> {
+  return await api.post<TutorialCompleteResponse>('/users/tutorial-complete');
 }

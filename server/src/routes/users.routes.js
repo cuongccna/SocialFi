@@ -17,6 +17,7 @@ const {
   uploadAvatar,
   uploadPhoto,
   getBadgeStatus,
+  completeTutorial,
 } = require('../controllers/usersController');
 
 // Configure multer for memory storage (we'll handle file saving manually)
@@ -61,6 +62,9 @@ router.get('/boost-status', getBoostStatus);
 
 // POST /users/boost - Boost profile visibility (costs 500 $LOVE)
 router.post('/boost', boostProfile);
+
+// POST /users/tutorial-complete - Mark tutorial as completed and get 100 $LOVE bonus
+router.post('/tutorial-complete', completeTutorial);
 
 // GET /users/:id - Get public profile of another user
 router.get('/:id', getUserById);

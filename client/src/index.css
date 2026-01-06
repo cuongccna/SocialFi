@@ -184,3 +184,21 @@ body {
 .animate-ticker {
   animation: ticker 20s linear infinite;
 }
+
+/* Onboarding Tutorial Highlight */
+.tour-highlight {
+  position: relative;
+  z-index: 9998 !important;
+  box-shadow: 0 0 0 4px var(--color-primary), 0 0 30px rgba(0, 255, 136, 0.5);
+  border-radius: 16px;
+  animation: tour-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tour-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px var(--color-primary), 0 0 30px rgba(0, 255, 136, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--color-primary), 0 0 50px rgba(0, 255, 136, 0.7);
+  }
+}

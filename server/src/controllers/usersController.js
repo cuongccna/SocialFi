@@ -94,6 +94,7 @@ async function getCurrentUser(req, res, next) {
         balance_love,
         is_active,
         last_active_at,
+        has_seen_tutorial,
         created_at
       FROM users
       WHERE id = $1
@@ -550,6 +551,74 @@ async function uploadPhoto(req, res, next) {
   }
 }
 
+// Tutorial completion bonus
+const TUTORIAL_BONUS_LOVE = 100;
+
+/**
+ * POST /users/tutorial-complete
+ * Mark tutorial as completed and reward 100 $LOVE
+ */
+async function completeTutorial(req, res, next) {
+  const client = await getClient();
+  
+  try {
+    const userId = req.user.id;
+    
+    await client.query('BEGIN');
+    
+    // Check if user already completed tutorial
+    const userCheck = await client.query(
+      'SELECT has_seen_tutorial, balance_love FROM users WHERE id = $1 FOR UPDATE',
+      [userId]
+    );
+    
+    if (userCheck.rows.length === 0) {
+      throw new ApiError(404, 'User not found');
+    }
+    
+    const user = userCheck.rows[0];
+    
+    // If already completed, just return success (no double reward)
+    if (user.has_seen_tutorial) {
+      await client.query('COMMIT');
+      return res.json({
+        success: true,
+        message: 'Tutorial already completed',
+        bonus_awarded: false,
+      });
+    }
+    
+    // Mark tutorial as completed and award bonus
+    const result = await client.query(`
+      UPDATE users
+      SET 
+        has_seen_tutorial = TRUE,
+        balance_love = balance_love + $2,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, display_name, balance_love, has_seen_tutorial
+    `, [userId, TUTORIAL_BONUS_LOVE]);
+    
+    await client.query('COMMIT');
+    
+    console.log(`[Tutorial] User ${userId} completed tutorial, awarded ${TUTORIAL_BONUS_LOVE} $LOVE`);
+    
+    res.json({
+      success: true,
+      message: `🎉 Welcome bonus! You received ${TUTORIAL_BONUS_LOVE} $LOVE tokens!`,
+      bonus_awarded: true,
+      bonus_amount: TUTORIAL_BONUS_LOVE,
+      user: result.rows[0],
+    });
+    
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   getUserStats,
   getCurrentUser,
@@ -560,4 +629,5 @@ module.exports = {
   uploadAvatar,
   uploadPhoto,
   getBadgeStatus,
+  completeTutorial,
 };

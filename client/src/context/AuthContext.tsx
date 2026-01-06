@@ -99,6 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             interests: null,
             assets: null,
             photos: null,
+            has_seen_tutorial: false, // Show tutorial in dev mode
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };

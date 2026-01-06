@@ -7,6 +7,8 @@ import { haptic } from '../utils/telegram';
 import { useAuth } from '../context/AuthContext';
 import { getFeed, refreshFeed } from '../services/feed.service';
 import { swipeRight, swipeLeft } from '../services/swipe.service';
+import { completeTutorial } from '../services/profile.service';
+import OnboardingTutorial from '../components/OnboardingTutorial';
 import type { FeedUser, SwipeResult } from '../types';
 
 // ============================================
@@ -171,10 +173,32 @@ function isNewUser(createdAt: string | undefined): boolean {
 const IDO_WELCOME_SHOWN_KEY = 'cryptocrush_ido_welcome_shown';
 
 export default function FeedPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [users, setUsers] = useState<FeedUser[]>([]);
   const [isEmpty, setIsEmpty] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Tutorial State
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    // Show tutorial if user hasn't seen it
+    if (user && !user.has_seen_tutorial) {
+      const timer = setTimeout(() => setShowTutorial(true), 1500); // 1.5s delay
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  const handleTutorialComplete = async () => {
+    try {
+      await completeTutorial();
+      setShowTutorial(false);
+      await refreshUser();
+    } catch (error) {
+      console.error('Failed to complete tutorial:', error);
+      setShowTutorial(false);
+    }
+  };
   
   // IDO Welcome modal state
   const [showIDOWelcome, setShowIDOWelcome] = useState(false);
@@ -501,6 +525,15 @@ export default function FeedPage() {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-dark to-dark-100">
+      {/* Onboarding Tutorial */}
+      <AnimatePresence>
+        {showTutorial && (
+          <OnboardingTutorial 
+            onComplete={handleTutorialComplete} 
+          />
+        )}
+      </AnimatePresence>
+
       {/* Match Popup */}
       <MatchPopup
         isOpen={showMatchPopup}
@@ -531,7 +564,7 @@ export default function FeedPage() {
       </div>
 
       {/* Card Stack Area */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden" data-tour="card-stack">
         <CardStack
           key={feedKey} // Force re-render on full refresh
           ref={cardStackRef}
